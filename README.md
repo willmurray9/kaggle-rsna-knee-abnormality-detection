@@ -63,6 +63,7 @@ artifacts/kaggle/       Private notebook builds, run logs and submission evidenc
 `make test` uses synthetic fixtures and runs without competition data or Kaggle
 credentials. One optional public-reference integration check skips when its
 separately downloaded, audited source notebook and manifest are unavailable.
+GitHub Actions runs the same tests on pushes to `main` and pull requests using Python 3.12 and the locked dependencies on a CPU runner.
 
 `make metadata-baseline` compares constant 0.5, training-fold prevalence and regularized logistic regression using series counts on the frozen split. It saves a new timestamped run and refuses to overwrite existing experiments. [EDA](docs/eda.md) explains the split and missing-label handling; [experiments](docs/experiments.md) records the fixed recipe, uncertainty and error review. Validation is study/report-grouped, with unresolved patient overlap. The model uses only the 58 observed-label cases and metadata available at inference.
 
