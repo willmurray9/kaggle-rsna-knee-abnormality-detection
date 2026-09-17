@@ -391,3 +391,20 @@ soft-target experiment must retain unknown masks and observed-label precedence;
 no universal cutoff or calibrated-score claim follows from this small sample.
 See the [audit and score diagnostic](label-sanity-v2.md). That follow-up was not
 run in this depth experiment, and no training labels were changed.
+
+## Preserved public scores — preregistered September 17
+
+The user approved the next matched supervision experiment and ongoing reviewed
+merges to main. [The frozen recipe](soft-target-plan.md) compares the current
+binary-public-label two-block model against the same model trained on preserved
+public scores for eligible derived cells. Official labels, unknown masks, weights,
+folds, images, initialization and schedule remain fixed. This includes softening
+public negatives to 0.08 as well as positives to 0.68/0.82/0.94; it introduces no
+new labels and makes no calibration claim.
+
+The rerun binary control must reproduce the saved reference within 1e-6 OOF
+probability difference and 1e-12 fold-AUC difference. Promotion requires higher
+mean AUC and improvement in at least two folds versus both controls, followed by
+offline inference checks. No outcome or additional submission exists at
+preregistration. The source and recipe will be committed before launch; results
+will be recorded separately.
