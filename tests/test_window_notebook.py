@@ -97,7 +97,9 @@ def test_1300_dynamic_ids_match_cached_float16_cpu_attention_predictions(saved_e
     np.testing.assert_allclose(result[TARGET_COLUMNS], expected, rtol=0, atol=1e-7)
     monkeypatch.setattr('rsnaknee.window_notebook.prepare_study', prepare)
     local = predict_test_images(test.iloc[:3], series.iloc[:3], tmp_path, model, encode)
-    np.testing.assert_array_equal(local[TARGET_COLUMNS], result.iloc[:3][TARGET_COLUMNS])
+    assert local[ID_COLUMN].tolist() == ids[:3] and local.shape == (3, 13)
+    # Different study batch sizes can differ by float32 roundoff.
+    np.testing.assert_allclose(local[TARGET_COLUMNS], result.iloc[:3][TARGET_COLUMNS], rtol=0, atol=1e-7)
 
 
 def test_portable_real_dicom_preparation_matches_extraction(saved_experiment, tmp_path, image_study):

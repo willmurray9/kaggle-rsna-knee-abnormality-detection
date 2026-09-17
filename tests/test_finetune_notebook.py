@@ -262,7 +262,10 @@ print('isolated tiny DINOv2 training/inference passed')
 '''
     script = script.replace('num_hidden_layers=3', f'num_hidden_layers={blocks}').replace("MRIModel(encoder, 'late_blocks')", f'MRIModel(encoder, {arm!r})')
     env = dict(os.environ, PYTHONPATH=str(working), HF_HUB_OFFLINE='1', TRANSFORMERS_OFFLINE='1')
-    completed = subprocess.run([sys.executable, '-c', script], cwd=working, env=env,
+    # The embedded package exceeds Linux's limit for a single command argument.
+    script_path = working / 'exercise_package.py'
+    script_path.write_text(script)
+    completed = subprocess.run([sys.executable, str(script_path)], cwd=working, env=env,
                                 capture_output=True, text=True, timeout=120)
     assert completed.returncode == 0, completed.stdout + completed.stderr
     assert 'isolated tiny DINOv2 training/inference passed' in completed.stdout
