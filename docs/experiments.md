@@ -463,3 +463,9 @@ cross-batch float32 difference. The fixes execute the same isolated script from 
 temporary file and use the existing 1e-7 numerical tolerance while retaining exact
 ID/order checks. No training or promotion tolerances changed. Fresh Linux CI at
 `58c8f7c` passed **256 tests, one expected skip**.
+
+A later documentation-only commit exposed the same one-ULP assumption in an
+existing checkpoint test: reversing 18 inputs changes which studies occupy the
+eight-row versus two-row batches. That test now separates exact saved-weight and
+same-order prediction roundtrips from the 1e-7-tolerant reordered prediction check.
+This is a test-only correction; the model and experimental decision are unchanged.

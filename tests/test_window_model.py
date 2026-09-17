@@ -65,8 +65,12 @@ def test_real_training_updates_weights_and_roundtrips_safely(tmp_path):
     expected = predict_windows(model, features, presence)
     path = tmp_path / "model.pt"
     torch.save(model.state_dict(), path)
-    actual = predict_windows(load_head(path), features[::-1], presence[::-1])
-    np.testing.assert_array_equal(actual[::-1], expected)
+    restored = load_head(path)
+    assert all(torch.equal(value, restored.state_dict()[name]) for name, value in model.state_dict().items())
+    np.testing.assert_array_equal(predict_windows(restored, features, presence), expected)
+    actual = predict_windows(restored, features[::-1], presence[::-1])
+    # Reversing inputs changes which studies occupy the smaller final batch.
+    np.testing.assert_allclose(actual[::-1], expected, rtol=0, atol=1e-7)
     assert expected.shape == (18, 12)
     assert np.isfinite(expected).all() and np.all((expected >= 0) & (expected <= 1))
 
