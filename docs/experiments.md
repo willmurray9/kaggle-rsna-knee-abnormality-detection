@@ -5,7 +5,389 @@ Keep one row per hypothesis. Detailed outputs live under `artifacts/experiments/
 | Date | Run | Hypothesis / change | Local result | Decision |
 | --- | --- | --- | --- | --- |
 | 2026-09-16 | constant | Verify data, score and output plumbing with 0.5 probabilities | Expected macro AUC 0.500; no learned model or CV | Sanity reference only; no upload |
+| 2026-09-16 | metadata-v1 | Acquisition series counts may carry weak disease signal. Compare fixed C=0.1 logistic regression with 0.5 and fold-training prevalence on one frozen three-fold study/report-group split; no reports, images or UIDs as predictors. Hypothesis and selection rule registered before fitting. | Mean fold macro AUC **0.598926**, fold SD 0.043192; both references 0.500000 | Selected by prespecified mean AUC > 0.500 rule. No hyperparameter/seed search or leaderboard-driven changes. |
+| 2026-09-16 | public-image-reference | A vetted public DINOv2/report-supervised image ensemble should provide a stronger submission reference. Reproduce its exact pixel recipe with strict output validation and safe checkpoint loading. | Private offline example passed: 20 members × 10 windows; actual submission 56286555 **COMPLETE**, public AUC **0.891** | Best submitted public score. Treat as external reference; public competition-trained weights are not valid local CV. |
+| 2026-09-16 | frozen-image-supervision-v1 | Frozen DINOv2-S image features should outperform acquisition counts; additional masked report-derived supervision should improve the same regularized heads. Compare explicit-only, report-derived weight 1.0 and report-derived weight 0.25 on frozen folds, C=0.1, no hyperparameter search. | Mean fold observed-label AUC: explicit-only **0.651561**, full silver **0.691281**, quarter silver **0.697812**; comparison/refit 12.84 seconds | Quarter silver selected by the prespecified highest-mean rule. Its small advantage over full silver is inconclusive; preserve all OOF predictions and inspect probability errors. |
+| 2026-09-16 | frozen-image-pca32-v1 | The quarter-weight silver model improves ranking but has worse Brier error than gold-only and 58/696 incorrect probabilities outside 0.05–0.95. Test whether a 32-component unwhitened PCA restriction reduces unstable high-dimensional fitting. Keep encoder, folds, labels, C=0.1 and silver weight 0.25 fixed; fit scaler/PCA only on training rows, seed 20260916, no rank search. | Mean AUC **0.692956**, delta **−0.004856**; two folds improved, mean-fold Brier 0.223942 | Rejected by the registered mean-AUC requirement; retain quarter-weight baseline. This is exploratory reuse of 58 validation cases. |
+| 2026-09-16 | coverage-mean-v1 | Twelve central slices and ten neighboring three-slice windows, averaged per plane, may recover information lost by the sparse sample. Keep generic encoder, 224 px, three selected series, labels, silver weight 0.25 and C=0.1 fixed. | Mean AUC **0.712094**, delta **+0.014282**; two folds improved | Passes declared promotion rule; conditional interval includes zero. Offline inference passed; superseded by the adapted candidate before competition submission. |
+| 2026-09-16 | coverage-attention-v1 | A small learned diagnosis-specific aggregator of the same frozen window cache may outperform fixed mean pooling and linear heads. Fixed six epochs, 128 hidden units, dropout 0.2, AdamW LR 0.001/weight decay 0.02, batch eight, seed 20260916; silver weight 0.25. | Mean AUC **0.707859**, delta **+0.010047** versus original; **−0.004235** versus coverage mean | Passes original-reference rule but does not improve on mean coverage; retain as a completed comparison. No epoch or hyperparameter search followed. |
+| 2026-09-16 | coverage-adaptation-v1 | Compare frozen versus final-two-block DINOv2 adaptation on identical uint8 pixels and deterministic sampled training windows. Same attention head, six epochs, batch eight, AdamW head LR 0.001/backbone LR 0.000008, decay 0.02, silver weight 0.25; all windows at inference. | Frozen control **0.697164**; adapted **0.759911**. Adaptation improves all three folds versus both control and original; complete job 1,832.16 seconds | Adapted final refit selected before leaderboard feedback. Exact offline parity passed; submission **56290319 COMPLETE**, public AUC **0.780**, new independent best. |
+| 2026-09-17 | depth-adaptation-v1 | Train final six versus two DINOv2 blocks; keep labels, saved folds, pixels, head, six epochs, optimizer and sampling fixed. Rerun the two-block control and compare against the saved reference. | Two-block control **0.759911**, exactly reproducing saved predictions; six-block candidate **0.748275**, delta **−0.011635**, one of three folds improves; complete job 2,258.52 seconds | Rejected by the preregistered rule. Retain independent public best **0.780**; no new submission or per-target blend. |
+
+The independent improvement pass is specified in
+[its plan](independent-improvement-plan.md). The separate 120-report rules pilot
+failed its release checks; [pilot findings](report-pilot.md) document low coverage
+and interpretation errors. Its annotations remain outside model training. The
+0.891 external ensemble is not an initializer or valid local comparison model.
 
 For each learned run, save settings/seed, input and split hashes, producing commit and dirty state, dependency versions, preprocessing and weight provenance, held-out predictions, macro/per-target scores, runtime and a brief error review. Prefer a plain `summary.json` plus CSVs to a tracking service. Preserve earlier runs instead of overwriting them.
 
+**Source-control provenance, September 17:** the experiments below were completed
+while development changes remained uncommitted on top of scaffold `3b79c70`.
+The subsequent Git catch-up groups the implemented work into logical commits;
+those commits were created after the runs and are not their original producing
+revisions. Reproduce historical runs using their recorded source hashes and
+preserved source/build snapshots, rather than the scaffold revision alone.
+Original manifests remain unchanged. For future experiments, commit and push
+the reviewed source and recipe before launch, record that revision alongside
+source hashes, and commit outcomes separately after evaluation.
+
+Before any image-head fitting, the completed image audit found one duplicate pair
+across original folds 0 and 1: all nine sampled pixels, dimensions and geometry
+matched despite different anonymized patient keys. Neither study had observed
+labels and both report groups were singletons. The versioned `image-v1` split
+moves one study from fold 1 to fold 0; all 58 observed-label assignments remain
+unchanged. Original artifacts are preserved. The new split SHA-256 is
+`23c611d98c910549c5c143b30de436d4217214aae239f15850cf02db2cd6ba21`.
+All image comparisons use this corrected split, and `metadata-image-v1` refreshes
+the unchanged metadata recipe against its provenance. This correction responds to
+duplicate evidence, not scores or a new seed search.
+
+The `metadata-image-v1` refresh is verified byte-identical to `metadata-v1` for
+`model.json`, `fold_models.json`, `oof.csv` and `submission.csv`. Learned OOF
+probabilities differ by exactly zero; mean fold AUC remains **0.5989261703** and
+the 1,000-attempt bootstrap is unchanged. Only split/run provenance changed.
+
+Offline image-inference parity used absolute and relative tolerance 1e-4,
+fixed before execution. Identical sampled images produced embedding differences
+up to 2.9e-5 across GPU batches, so byte equality is not the appropriate check.
+The independent quarter-silver version 1 example notebook passed on a Tesla T4
+in **8.505 seconds**, with maximum local/Kaggle probability difference
+**3.84e-6** across three studies. The subsequent hidden-test submission completed
+with public AUC **0.718**; the example runtime remains a separate measurement.
+
 The constant baseline is a regenerable fixture at `artifacts/baselines/constant/`; rerunning it overwrites that fixture. Its `summary.json` records input/config/submission hashes, environment, code revision and the metric sanity check.
+
+## Metadata baseline: first learned submission candidate
+
+Run: `PYTHONPATH=src .venv/bin/python -m rsnaknee.baseline --output artifacts/experiments/metadata-v1`. This directory is preserved; subsequent runs must use a new output directory (`make metadata-baseline` chooses a timestamp). Fitting, validation and 1,000 bootstrap attempts took 51.8 seconds locally. No GPU, images, external data or pretrained weights were used.
+
+Features are total series count, three anatomical-plane counts, two fluid-sensitivity counts and two fat-suppression counts. Categories are fixed; IDs only align rows. The two acquisition flags are redundant in the current snapshot; the recipe was kept unchanged rather than tuning after seeing scores. Each target uses `StandardScaler` and `LogisticRegression(C=0.1, max_iter=1000, random_state=20260916)` with no class weighting. Each fold fits preprocessing and models exclusively on its observed training cases; all 4,349 fully unlabeled studies are excluded from fitting. Labels come only from the observed competition columns.
+
+The seed-42 split and its rationale are in [EDA](eda.md). Split SHA-256: `d1c1f632ed2d87709a984d94365389983b1adbad15704a9aa8e5a98397831910`. Fold macro AUCs were 0.647713, 0.583499 and 0.565566. Both the global 0.5 predictor and each fold's training-prevalence predictor scored exactly 0.5 within every fold. We average within-fold scores; pooling different prevalence constants across folds would create an artificial ranking.
+
+| Target | Mean validation AUC |
+| --- | ---: |
+| ACL | 0.714206 |
+| MCL | 0.534722 |
+| Medial Meniscus | 0.426789 |
+| Lateral Meniscus | 0.535426 |
+| Medial OA | 0.693527 |
+| Lateral OA | 0.605502 |
+| PF OA | 0.734525 |
+| Effusion | 0.441138 |
+| Synovitis | 0.654655 |
+| Baker's | 0.557217 |
+| Contusion | 0.597344 |
+| Fracture | 0.692063 |
+
+Joint study resampling within each fold gave an exploratory 95% percentile interval of **+0.0440 to +0.1558** for the mean AUC difference versus the constant reference (point difference +0.0989). Only 694 of 1,000 attempts retained both classes for every target in every fold; 306 were excluded. This conditional interval holds the fitted models fixed and omits fitting, split and unresolved patient-dependence uncertainty. It is not evidence of reliable population generalization. The 58 labeled cases all have distinct report groups, so study and report-group resampling coincide for this experiment.
+
+Error review: Medial Meniscus and Effusion rank below chance in these folds; PF OA and ACL rank highest. We retain all 12 prespecified heads rather than selecting/reversing individual targets after viewing results. Saved `oof.csv` and `largest_errors.csv` support case-level review without raw reports. Metadata cannot distinguish pathology among studies with identical acquisition counts; image inspection and image-based learning are the next substantive step.
+
+There are only 20 distinct metadata profiles among 58 labeled studies; 48 cases share 10 repeated profiles, each with conflicting labels. The most common profile covers 16 labeled cases and contains both classes for all 12 targets. Across 4,407 training studies there are 135 profiles, and the eight-feature matrix has rank four. The 20 largest individual squared-probability errors are positive conditions assigned probabilities 0.036–0.172, especially Lateral OA (6), MCL (4) and Baker's (3). The ten worst study-level predictions have median 6.5 positive findings versus four overall. These aggregate findings motivate image features; they do not justify post-hoc target tuning on this small split.
+
+The final model refits on all 58 explicitly labeled cases. Model SHA-256: `96be94fca140d7a7832b28c75c77e5cfb8d4162ce0d9e7af7ed272b0b7f02dce`. `summary.json` records input/source/artifact hashes, the baseline revision `3b79c70` plus dirty state, package versions, fold results and the selection rule; `baseline_source.py` preserves the exact modeling source. `model.json`, fold models, features, observed labels, held-out predictions and generated submission remain in ignored artifacts.
+
+Rejected for this milestone: replacing missing labels with zero; report inputs at inference; report-derived labels without extraction validation; a full 570 GB image download; GPU training before an image/compute plan; tuning from repeated leaderboard feedback. The metadata result may reflect acquisition or site selection and does not demonstrate MRI understanding or patient-independent performance.
+
+After the recipe and local result were frozen, Kaggle submission 56286205 completed with public AUC **0.508**. The metadata recipe remained unchanged; subsequent image experiments are recorded separately. The gap reinforces the limits above and motivates image-based modeling; it is not a basis for tuning this small validation set or selecting individual heads.
+
+## Frozen image features and report supervision: first comparison
+
+Run: `artifacts/experiments/frozen-image-supervision-v1/`; analysis:
+`artifacts/experiments/frozen-image-supervision-v1-analysis/`. Frozen generic
+DINOv2-small feature extraction took **1,996.20 seconds** on free Kaggle compute.
+The 2,307 features contain CLS and mean-patch embeddings from three fixed MRI
+planes plus presence flags. The independently pretrained encoder was not fitted
+on competition images or reports. The three supervision recipes share these
+features, corrected `image-v1` folds, training-only scaling, and per-target
+logistic heads with C=0.1. Comparison and selected-model refit took **12.84 seconds**.
+
+The label policy contributes **37,920** known report-derived target cells in
+addition to **696** observed cells; **14,268** unknown cells remain excluded.
+Only the 58 observed-label studies supply validation truth. Each training fold
+excludes its complete held-out studies, reports and labels before fitting.
+
+| Recipe | Fold 0 AUC | Fold 1 AUC | Fold 2 AUC | Mean AUC | Fold SD | Mean-fold Brier |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| Observed only | 0.661358 | 0.664456 | 0.628870 | **0.651561** | 0.019712 | 0.255285 |
+| Silver weight 1.0 | 0.737142 | 0.645168 | 0.691533 | **0.691281** | 0.045988 | 0.303533 |
+| Silver weight 0.25 | 0.751832 | 0.649249 | 0.692356 | **0.697812** | 0.051509 | 0.272811 |
+
+| Target | Observed only AUC | Full silver AUC | Quarter silver AUC |
+| --- | ---: | ---: | ---: |
+| ACL | 0.669101 | 0.710688 | 0.684497 |
+| MCL | 0.347631 | 0.703840 | 0.658497 |
+| Medial Meniscus | 0.500947 | 0.602609 | 0.653157 |
+| Lateral Meniscus | 0.790456 | 0.735986 | 0.776816 |
+| Medial OA | 0.875446 | 0.873958 | 0.882688 |
+| Lateral OA | 0.814281 | 0.656873 | 0.700677 |
+| PF OA | 0.627130 | 0.695830 | 0.705025 |
+| Effusion | 0.746561 | 0.788360 | 0.827513 |
+| Synovitis | 0.527256 | 0.595421 | 0.590067 |
+| Baker's | 0.793552 | 0.607143 | 0.602381 |
+| Contusion | 0.651770 | 0.739744 | 0.719414 |
+| Fracture | 0.474603 | 0.584921 | 0.573016 |
+
+Paired study resampling within the saved folds used 1,000 attempts and seed
+20260916. The 58 observed report groups are distinct. **704** attempts retained
+both classes for every target in every fold; **296** were excluded. Quarter silver
+minus observed-only mean AUC is **+0.04625**, conditional 95% interval
+**−0.00783 to +0.09693**; quarter silver minus metadata is **+0.09889**,
+interval **+0.02582 to +0.17774**. Full silver minus observed-only is **+0.03972**,
+interval **−0.01871 to +0.08777**. These intervals hold predictions fixed and
+omit training/selection uncertainty; rare-class exclusions condition the result.
+The quarter/full point difference of **0.00653** does not establish superiority.
+
+Error inspection shows better ranking need not mean better probabilities.
+Quarter silver has 16 confidently wrong cells (probability below 0.01 on a
+positive or above 0.99 on a negative), versus 22 for observed-only and 53 for
+full silver, among 696 observed cells. Quarter-silver Brier exceeds observed-only
+despite its higher AUC. Mean Synovitis probability is 0.800 against observed
+prevalence 0.466; Baker's is 0.474 against 0.207. Compared with observed-only,
+quarter silver improves MCL AUC by 0.311 and Medial Meniscus by 0.152 but reduces
+Baker's by 0.191 and Lateral OA by 0.114. These are descriptive findings, not
+permission to tune individual targets or extraction thresholds. Per-target
+errors and probability diagnostics are saved without report text.
+
+Selected quarter-silver model SHA-256:
+`c1b52ab7e7cf5f67538675e894559aeeafe5361f965faa5f2627803d4080eb3a`.
+The source/image manifests, all recipe OOF predictions, fold models and analysis
+input hashes are preserved. The single prespecified PCA-32 restriction was evaluated and rejected, as detailed
+below. Extra nonlinear head capacity and encoder training are deferred.
+
+Limits: only 58 gold cases, with two or three positives in some fold/target cells;
+selection reuses that validation evidence. The public report-label generator's
+independence from these gold studies is unknown, so even group-excluded image
+training does not establish fully independent evaluation of the overall labeling
+pipeline. Report definitions, selective missingness and annotation thresholds may
+differ. The duplicate correction addresses demonstrated overlap only; anonymized
+patient IDs and a selected-slice audit do not establish patient independence.
+
+## PCA-32 restriction: rejected
+
+`artifacts/experiments/frozen-image-pca32-v1/` preserves the candidate, OOF
+predictions and exact experiment source. Only quarter-weight silver supervision
+was tested, using unwhitened randomized PCA with 32 components and seed 20260916
+fitted inside each training fold. It retained approximately 58.7–58.9% of training
+variance. The PCA and logistic coefficients were combined into the same portable
+2,307-input linear form; default non-PCA behavior remained unchanged.
+
+Mean fold AUC was **0.692956**, versus **0.697812** for the saved reference.
+Fold differences were **−0.053331, +0.020207, +0.018556**. Two folds improved, but
+the required mean-AUC improvement failed, so the candidate was not submitted.
+Mean-fold Brier improved from 0.272811 to **0.223942**; that diagnostic improvement
+does not replace the competition's ranking metric. The comparison took 1.99
+seconds. No component-count, seed or regularization search followed.
+
+The unchanged quarter-silver model passed offline inference and was submitted as
+ref **56287107**, private notebook version 1. Its actual hidden-test result is
+recorded in [the submission log](submissions.md). The public reference remains
+separate; its competition-trained members cannot support honest local ensemble
+selection on these folds.
+
+Kaggle subsequently confirmed the unchanged quarter-silver submission
+**COMPLETE**, public AUC **0.718** (ref 56287107). The image recipe and PCA rejection
+were frozen before this result; the score was not used to tune either model.
+
+The public-reference submission also completed: ref **56286555**, public AUC
+**0.891**, checked at 21:49:17 UTC. This is the strongest submitted result from
+this pass, compared with our independent model's 0.718 and metadata's 0.508. It is
+an externally trained ensemble reproduction, not a locally validated model or
+evidence that our 58-case validation supports that score. No blend with this
+ensemble was selected from invalid local predictions.
+
+
+## Neighboring-slice coverage and learned aggregation
+
+Coverage extraction completed all 4,410 studies in 3,576.40 seconds. All 13,230
+selected series were usable, with zero decoding, ordering or spacing fallbacks
+and no sampled-image matches across saved folds or train/test. The broader check
+preserves the existing split; it does not establish patient independence. The
+36-tile first-study preview showed no blank images or apparent aspect distortion.
+The approximately 8 GB uint8 pixel cache stays private on Kaggle. Downloaded
+compact outputs and source hashes were verified before fitting.
+
+| Recipe | Fold 0 | Fold 1 | Fold 2 | Mean AUC |
+| --- | ---: | ---: | ---: | ---: |
+| Original quarter-weight reference | 0.751832 | 0.649249 | 0.692356 | 0.697812 |
+| Coverage mean + same linear heads | 0.766401 | 0.735648 | 0.634233 | **0.712094** |
+| Cached-window attention head | 0.739229 | 0.691307 | 0.693043 | **0.707859** |
+
+The coverage mean comparison and refit took 17.51 seconds; cached attention took
+14.17 seconds on the Mac. Each used unchanged labels, silver weight 0.25 and the
+same saved whole-study folds. The 58 complete gold studies are the only validation
+truth. All three fold models and final refits are saved in their respective
+`artifacts/experiments/coverage-*-v1` directories.
+
+Coverage versus original has paired AUC delta **+0.01428**, conditional 95%
+interval **−0.02738 to +0.05163**. Attention versus original is **+0.01005**,
+interval **−0.03088 to +0.05079**; attention versus coverage is **−0.00423**,
+interval **−0.04532 to +0.03835**. Each bootstrap retained 704 of 1,000 within-fold
+study draws with both classes present. These fixed-prediction intervals exclude
+training and selection uncertainty. Coverage passes the predeclared promotion
+rule but has substantial fold dispersion, including a 0.05812 loss on fold 2.
+Attention has lower fold dispersion, which is not the declared selection metric.
+No per-condition mixing, new seed, epoch selection or leaderboard-based change
+was introduced after viewing these results.
+
+Exact comparisons, per-target scores, training-ID exclusion checks and input
+hashes are saved in
+`artifacts/reports/independent-improvement-v1/frozen-comparison/`.
+The coverage notebook passed offline inference in 8.83 seconds, with maximum
+probability difference 1.84e-6 versus its cached-feature predictions. It was not
+submitted because the completed adapted candidate below had stronger local
+evidence under the same selection rule.
+
+## Limited encoder adaptation: selected
+
+Private training notebook `willmurray99/rsna-knee-adaptation-training`, version 1,
+completed both matched arms in **1,832.16 seconds** after a disposable probe
+projected 3,329.59 seconds, below the 27,000-second budget. Each arm completed
+three fold fits and one full refit, all six fixed epochs. The final refits use
+4,354 studies with known supervision; no pilot annotations enter training.
+Both arms use the same saved windows, uint8 pixels and attention architecture.
+The adapted arm alone updates the last two generic DINOv2 blocks and final
+LayerNorm. No public competition-trained weights are used.
+
+| Recipe | Fold 0 | Fold 1 | Fold 2 | Mean AUC |
+| --- | ---: | ---: | ---: | ---: |
+| Matched frozen control | 0.723554 | 0.687531 | 0.680408 | 0.697164 |
+| Final-two-block adaptation | 0.780411 | 0.732049 | 0.767272 | **0.759911** |
+
+Adaptation versus its matched control has mean AUC delta **+0.06275**, conditional
+95% interval **+0.03072 to +0.10034**. Versus the original independent model,
+delta is **+0.06210**, interval **+0.01840 to +0.10446**, with all three folds
+improved. Versus coverage mean, delta is **+0.04782**, interval **+0.01169 to
++0.08498**, with two folds improved. The same 704 valid bootstrap draws and
+58-case limitations apply. These are conditional comparisons, not a guarantee of
+leaderboard performance or patient-independent generalization.
+
+The adapted model improves nine target means against the original. ACL, MCL and
+Contusion remain below their original values; no per-target replacement or blend
+was chosen after seeing these results. The matched frozen control fails the
+original-reference mean-AUC rule. Attention fails to improve mean coverage.
+All candidates and their unsuccessful comparisons remain preserved.
+
+`artifacts/reports/independent-improvement-v1/full-comparison/` contains exact
+scores, paired intervals and decisions. Independent review recalculated all
+72 matched-arm fold/target AUCs and verified the exact training IDs, six epochs,
+30 compact artifact hashes, 11 source hashes and unchanged split/label hashes.
+The eight full checkpoints remain in the private Kaggle training output;
+compact predictions, source and provenance are downloaded locally.
+
+The selected full-refit model SHA-256 is
+`9b4097edc1fa34ba8c2f4f9e4a1cdfbf8f2a135d2e0034762edc2788f8015af0`.
+`selection.json` freezes the decision before the new leaderboard result. Private
+offline inference notebook `willmurray99/rsna-knee-adapted-image`, version 1,
+completed the three examples in **9.34 seconds**, with **zero probability
+difference** versus saved predictions. The complete 224-test suite passed,
+including dynamic 1,300-ID inference and leakage checks. Actual competition
+submission **56290319** completed with public AUC **0.780**, checked at
+**01:22:05 UTC on September 17**. This improves our previous independent public
+score by **0.062**. The recipe and choice remained unchanged after submission;
+[submission evidence](submissions.md) records this result separately from CV.
+
+## Deeper adaptation and fresh label sanity check — preregistered September 17
+
+User-approved next step: a bounded fresh report-label audit, followed by one
+controlled model experiment if no fundamental data integrity problem is found.
+Hypothesis: adapting the final six DINOv2-small blocks improves image ranking
+over the current final-two-block model with the existing supervision.
+
+Compare `late_blocks` (two trainable encoder blocks) with `deep_blocks` (six),
+both including the final LayerNorm and identical attention head. Rerun the
+two-block control in the same job. Keep the existing six-epoch schedule,
+seed 20260916, batch eight, head/backbone learning rates 0.001/0.000008,
+weight decay 0.02, one sampled training window per plane, all ten windows at
+inference, 224-pixel images, three selected series, and gold/silver/unknown
+weights 1/0.25/0. Fixed final epoch only; no new augmentation, label changes,
+per-target blending, seed search, epoch selection or leaderboard tuning.
+
+Preserve the `image-v1` folds and label table exactly. Each arm trains three
+whole-fold-excluded models and one fresh full-data refit from generic weights.
+A disposable probe must project the complete job below 7.5 hours on free private
+Kaggle compute. Existing MRI/pixel caches and weights remain on Kaggle.
+
+Promote six-block adaptation only if its mean within-fold macro AUC is higher
+and it improves at least two of three folds versus **both** the rerun two-block
+control and the saved two-block reference (mean AUC 0.7599107356, public 0.780).
+Recompute metrics from saved OOF predictions and report paired study bootstrap
+uncertainty. Freeze the selection before any new competition submission. A
+promoted candidate must pass offline inference parity and submission checks;
+otherwise retain the current model and record the negative result.
+
+The diagnostic audit samples 24 fresh nongold report groups across language and
+linguistic difficulty, excluding gold-linked groups, the prior 120-report pilot
+and previously displayed examples. Freeze evidence-based agent interpretations
+before joining public labels. Report clear contradictions separately from
+severity/definition uncertainty and missing report evidence. This is a targeted
+sanity check, not clinical annotation, population accuracy estimation or a new
+training label release. No changes to training supervision follow automatically
+from individual disagreements. Systematic data alignment, masking or obvious
+polarity corruption would block training pending investigation; semantic
+disagreements are recorded as limitations of the fixed-label comparison.
+
+All comparisons remain exploratory on 58 repeatedly reused official-label
+studies; patient independence and the public extractor's independence from those
+labels remain unresolved. Working evidence is kept under ignored
+`artifacts/reports/depth-improvement-v1/` and `artifacts/label-sanity-v2/`.
+
+The [fresh audit](label-sanity-v2.md) completed before launch: 24 reports,
+137/168 agreement among mutually known targets, 28 threshold mismatches and
+three explicit tear-denial contradictions across two reports. Independent
+six-report review agreed on 70/72 tri-state decisions. This is targeted
+agent interpretation, not clinical accuracy or population error estimation.
+No source, join, masking or split corruption was found. The launch decision
+permits this one fixed-label comparison with known noisy supervision; it does
+not certify label quality or authorize broad model expansion on assumed-clean
+labels. The 288 review interpretations remain outside training.
+
+Implementation and final private/offline build passed review; 239 tests passed.
+Private notebook `willmurray99/rsna-knee-depth-training` version 1 was launched
+at 18:38:44 UTC on September 17 and completed successfully. Prior notebooks
+and their embedded source are preserved.
+
+### Depth comparison outcome: rejected
+
+All eight fits completed in **2,258.52 seconds**. Both arms used the exact saved
+labels, folds, sampled-window schedule, pixel cache and generic weights; their
+runtime library versions match the previous experiment. All six recorded epochs
+and exact training-ID sets were verified, including 4,354 studies per final fit.
+Saved metadata confirms two versus six trainable blocks plus final LayerNorm.
+
+| Recipe | Fold 0 | Fold 1 | Fold 2 | Mean AUC |
+| --- | ---: | ---: | ---: | ---: |
+| Saved two-block reference | 0.780411 | 0.732049 | 0.767272 | **0.759911** |
+| Rerun two-block control | 0.780411 | 0.732049 | 0.767272 | **0.759911** |
+| Six-block candidate | 0.790660 | 0.708115 | 0.746051 | **0.748275** |
+
+The control reproduces all 696 held-out probabilities exactly (maximum absolute
+difference zero). Six-block adaptation improves only fold 0 and loses mean AUC
+**0.011635**. Its paired conditional 95% bootstrap interval for the difference is
+**[−0.046552, +0.022831]**, from 704 accepted draws of 1,000. The interval includes
+zero; this is insufficient promotion evidence, not proof that deeper adaptation
+is always worse. Training and selection uncertainty and unresolved patient
+dependence are excluded, and the 58 validation studies have been reused.
+
+Five of twelve target means improve; seven decline. The largest declines are
+PF OA, effusion and Baker cyst; contusion and MCL improve. No per-target mixing,
+epoch change or seed search follows this exploratory observation. The six-block
+recipe fails against both controls, so the existing **0.780** public model remains
+selected. No new inference submission or competition submission was made.
+
+Only 46 compact output files (18.1 MB) were downloaded; all eight checkpoints
+remain private on Kaggle. The comparison verifies 30 compact artifacts per run.
+Results, source/dependency hashes and the selection record live under
+`artifacts/reports/depth-improvement-v1/`; training outputs are in
+`artifacts/kaggle/depth-training/versions/v1/output/adaptation/`.
+
+The audit also supplies a cheaper next hypothesis than full report relabeling:
+preserve public score gradations instead of hardening every YES verdict to one.
+In the targeted audit, 24/28 threshold mismatches have the lowest positive score,
+but mild synovitis provides valid positives at that score too. A future matched
+soft-target experiment must retain unknown masks and observed-label precedence;
+no universal cutoff or calibrated-score claim follows from this small sample.
+See the [audit and score diagnostic](label-sanity-v2.md). That follow-up was not
+run in this depth experiment, and no training labels were changed.

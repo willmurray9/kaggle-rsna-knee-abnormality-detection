@@ -1,24 +1,82 @@
 # Small steps toward a useful baseline
 
+**September 16 progress:** metadata EDA and a provisional frozen study/report-group
+split are complete. Constant/prevalence references and one learned series-metadata
+baseline have been evaluated. Private offline CPU execution passed; learned
+notebook version 2 was submitted. See [EDA](eda.md), [experiments](experiments.md)
+and [submission evidence](submissions.md). Private offline frozen-DINOv2 extraction
+and image/header inspection are now complete. One verified unlabeled duplicate
+pair prompted the explicit `image-v1` split revision, preserving the original
+split and all 58 gold assignments. Independent image-head comparisons completed:
+observed-only AUC 0.65156, full report-label weight 0.69128, quarter weight 0.69781.
+The chosen quarter-weight model completed hidden scoring with public AUC **0.718**.
+A single PCA-32 simplification failed its selection rule and was rejected. The
+separate public reference completed at **0.891**, the best submitted public score. See [the image workflow](image-model.md).
+
+The next independent pass completed broader slice coverage, cached attention and
+a matched encoder-adaptation comparison on the same labels and folds. Mean local
+AUCs were 0.71209, 0.70786 and **0.75991** for the adapted candidate, versus
+0.69716 for its matched frozen control. The adapted notebook passed exact offline
+prediction parity and submission **56290319** completed with public AUC **0.780**,
+our new independent best, **+0.062** over 0.718. The
+120-report rules pilot was rejected and did not change training labels. See
+[the improvement plan](independent-improvement-plan.md) and
+[experiment outcomes](experiments.md).
+
+**September 17 follow-up:** a fresh 24-report audit and the fixed-label depth
+comparison are complete. The two-block control exactly reproduced its saved
+predictions; six-block adaptation scored 0.74828 versus 0.75991 and was rejected.
+The independent public best remains **0.780**. The [audit](label-sanity-v2.md)
+found threshold mismatches and report contradictions, with most threshold
+disagreements concentrated in lower public score tiers. A matched test of
+preserved graded scores is an evidenced next hypothesis; it has not been run,
+and no audit annotations were added to training.
+
 ## 1. Working foundation — complete
 
-Audit the actual CSVs, preserve missing labels, verify macro AUC and submission format, and produce a constant 0.5 sanity output. AUC 0.5 is expected for constant predictions; it measures neither image understanding nor generalization. Run the included notebook on Kaggle when ready to verify its hosted execution.
+Audit the actual CSVs, preserve missing labels, verify macro AUC and submission format, and produce a constant 0.5 sanity output. AUC 0.5 is expected for constant predictions; it measures neither image understanding nor generalization. The included notebook's hosted execution has now passed.
 
 ## 2. Establish trustworthy validation
 
-Inspect a small, deliberately selected set of studies and DICOM headers. Confirm decoding, orientation, slice positions, planes and missing-series behavior. Sort slices using physical geometry, not filenames; visually check reconstructed series and preserve aspect ratio. MRI intensities vary by sequence, so document any normalization and inspect its effects.
+Completed: 4,410 studies and 13,230 selected series decoded with no header,
+sampled-image, spacing or physical-order fallback failures and no missing planes.
+The four-study, three-plane preprocessing contact sheet had no blank tiles or
+apparent aspect-ratio distortion. The fixed recipe preserves physical aspect ratio
+and records per-slice percentile normalization. Broader image-quality review
+remains necessary as modeling exposes specific failures.
 
-Check for repeated patients and duplicate studies before splitting. Save a single `data/processed/folds.csv` containing study, group and fold IDs, alongside the seed, input hashes and split reasoning. Use patient groups if trustworthy; otherwise explicitly label validation as study-grouped with unresolved patient overlap. Check both positive and negative counts for each target in every validation fold. If five folds are too sparse, reduce the fold count rather than silently ignoring undefined metrics. Do not search split seeds for better scores.
+Preserve the original `data/processed/folds.csv` and first-submission evidence.
+Use `data/processed/image-v1/folds.csv` for the image comparison: one unlabeled
+singleton report group moved from fold 1 to fold 0 after all nine selected image
+samples matched another study. Every gold assignment and report group remains
+intact; the revised audit has no sampled-image overlap across folds. Patient
+independence remains unresolved because the duplicate had different anonymized
+patient keys, issuers/sites were absent, and the image audit was not exhaustive.
+Keep this one documented revision fixed across comparisons; do not search splits
+for higher scores. Both classes remain present for every target in every fold.
 
 With only 58 labeled studies, scores will be unstable. Prefer per-target counts and paired held-out errors over small differences in aggregate AUC. Report fold dispersion and, when comparing real candidates, patient/study-level bootstrap uncertainty. Scanner/site-held-out checks can reveal shortcuts when enough metadata and labels support them.
 
 ## 3. First image learning loop
 
-Start with the explicit labels and one fixed series-selection rule, a small fixed slice sample and a modest 2D pretrained encoder with simple pooling to one prediction per study. Add PyTorch, DICOM decoders and the required pretrained checkpoint only for this experiment. Choose and record that recipe before looking at its validation scores. Use this limited-data model to test the pipeline, not to claim that 58 cases can establish generalization.
+Completed: frozen generic DINOv2-small features and the prespecified observed-only,
+full-weight and quarter-weight supervision comparisons. The improvement pass then
+tested twelve central slices, ten neighboring windows and learned aggregation.
+Its matched frozen-versus-adapted experiment supports updating the final two
+encoder blocks. All runs retain `data/processed/image-v1/report_labels.csv` and
+the audited saved folds. Generic feature extraction performed no competition
+fitting; supervised adaptation excluded each complete held-out fold. Treat the
+58 gold cases as exploratory validation, not established generalization.
 
 Save held-out probabilities, per-target AUC, runtime, preprocessing, fold identity and checkpoint provenance. Review representative errors and successful cases. Saliency maps, if added, are debugging aids rather than evidence of causal explanations.
 
 ## 4. Use reports as auditable training supervision
+
+Current training uses the audited public silver table, with gold precedence and
+unknowns masked. Our bounded EN/ES rules pilot did not meet its release criteria:
+low coverage and negation/scope errors prevented promotion. Its annotations stay
+outside training. A stronger multilingual extraction pilot remains a separate,
+untested idea; the failed rules prototype does not evaluate that alternative.
 
 Review report languages, target definitions, negation and uncertainty. Start with a small reviewed extraction sample before choosing a rules-based or model-assisted extractor. Avoid equating an unmentioned finding with absence without evidence. Store observed labels separately from derived labels, recording the report source, extraction method/version, uncertainty and any manual review.
 

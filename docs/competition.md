@@ -36,4 +36,10 @@ The [official data page](https://www.kaggle.com/competitions/rsna-knee-abnormali
 - [RSNA announcement](https://www.rsna.org/media/press/2026/2669) describes the MRI/report learning task and international, multilingual data.
 - The authenticated Kaggle competition-list API independently confirms deadlines, access, the ROC AUC metric family and notebook-only submission mode.
 
-Next verify patient grouping, site/scanner shifts, DICOM decoding, image orientation and usable series, and the exact report-label definitions. Detailed rules and any external label/model source need review before use. No DICOM images or external weights have been downloaded for this scaffold.
+The [image workflow](image-model.md) now records completed decoding, geometry and
+selected-image duplicate checks. One duplicate pair required a versioned split
+correction; patient independence and representative site validation remain
+unresolved. The [label audit](labels.md) and [public reference audit](public-reference.md)
+record source licenses, the retrieved rules and the host's hosted-LLM clarification.
+Full DICOMs and large encoder/ensemble weights remain on Kaggle; local image
+outputs are limited to compact features, audits and a bounded preprocessing preview.
