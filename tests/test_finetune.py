@@ -37,6 +37,7 @@ def examples():
     for target in TARGET_COLUMNS:
         labels[target] = np.arange(9) % 2
         labels[target + '__observed'] = labels[target].where(np.arange(9) % 3 != 2)
+        labels[target + '__derived'] = labels[target].map({0: .08, 1: .82})
         labels[target + '__mask'] = True
         labels[target + '__verdict'] = np.where(labels[target].eq(1), 'YES', 'NO')
     pixels = np.random.default_rng(19).integers(0, 256, (9, 3, 12, 4, 4), dtype=np.uint8)
@@ -90,7 +91,7 @@ def test_real_gradient_updates_only_authorized_parameters_and_unknowns_zero(arm)
         assert any(name.startswith(prefix) for name in changed) == (arm == 'late_blocks')
 
 
-@pytest.mark.parametrize('arm,blocks', [('late_blocks', 4), ('deep_blocks', 8)])
+@pytest.mark.parametrize('arm,blocks', [('late_blocks', 4), ('deep_blocks', 8), ('soft_targets', 4)])
 def test_heldout_changes_cannot_change_fitted_weights_and_safe_load(tmp_path, arm, blocks):
     pixels, presence, labels = examples()
     torch.manual_seed(32)
@@ -105,6 +106,7 @@ def test_heldout_changes_cannot_change_fitted_weights_and_safe_load(tmp_path, ar
     changed_pixels, changed_labels = pixels.copy(), labels.copy()
     changed_pixels[:3] = 255
     changed_labels.loc[labels.fold.eq(0), TARGET_COLUMNS] = -99
+    changed_labels.loc[labels.fold.eq(0), [t + '__derived' for t in TARGET_COLUMNS]] = np.nan
     changed_labels.loc[labels.fold.eq(0), [t + '__observed' for t in TARGET_COLUMNS]] = -99
     repeated, _ = finetune.train_fold(factory, arm, changed_pixels, presence, changed_labels, np.arange(9), table, 0)
     assert record['training_ids'] == [f'study-{i}' for i in range(3, 9)]
@@ -137,7 +139,7 @@ def test_runtime_projection_uses_only_selected_arm_count():
     assert finetune.project_runtime({'deep_blocks': 2.}, 100, 4., 58, 50.) == 1190.
 
 
-@pytest.mark.parametrize('arm,blocks', [('late_blocks', 3), ('deep_blocks', 7)])
+@pytest.mark.parametrize('arm,blocks', [('late_blocks', 3), ('deep_blocks', 7), ('soft_targets', 3)])
 def test_tiny_real_dinov2_autograd_freeze_boundary(arm, blocks):
     transformers = pytest.importorskip('transformers')
     encoder = transformers.Dinov2Model(transformers.Dinov2Config(
@@ -233,7 +235,7 @@ def test_pixel_cache_is_readonly_and_rejects_corruption_and_metadata_mismatch(tm
         finetune.read_pixel_cache(cache, audit)
 
 
-@pytest.mark.parametrize('arms', [('frozen', 'late_blocks'), ('late_blocks', 'deep_blocks')])
+@pytest.mark.parametrize('arms', [('frozen', 'late_blocks'), ('late_blocks', 'deep_blocks'), ('late_blocks', 'soft_targets')])
 def test_probe_restores_rng_does_not_seed_real_fits_and_records_excluded_training(arms):
     pixels, presence, labels = examples()
     def factory(arm):
@@ -247,12 +249,12 @@ def test_probe_restores_rng_does_not_seed_real_fits_and_records_excluded_trainin
     assert probe['selected_arms'] == list(arms)
     assert probe['total_training_steps_per_arm'] == 30  # 3 folds x 1 batch + final x 2, for 6 epochs.
     for arm in arms:
-        assert probe['encoder_adaptation'][arm]['trainable_blocks'] == {'frozen': 0, 'late_blocks': 2, 'deep_blocks': 6}[arm]
+        assert probe['encoder_adaptation'][arm]['trainable_blocks'] == {'frozen': 0, 'late_blocks': 2, 'deep_blocks': 6, 'soft_targets': 2}[arm]
     assert probe['probe_training_ids'] == [f'study-{i}' for i in range(3, 9)]
     assert probe['within_budget'] and probe['projected_total_seconds'] < 27000
 
 
-@pytest.mark.parametrize('arms', [None, ('late_blocks', 'deep_blocks')])
+@pytest.mark.parametrize('arms', [None, ('late_blocks', 'deep_blocks'), ('late_blocks', 'soft_targets')])
 def test_complete_two_arm_run_binds_schedule_ids_oof_and_checkpoints(tmp_path, monkeypatch, arms):
     import json
     import transformers
@@ -291,14 +293,17 @@ def test_complete_two_arm_run_binds_schedule_ids_oof_and_checkpoints(tmp_path, m
     monkeypatch.setattr(transformers.AutoModel, 'from_pretrained', load_encoder)
     output = tmp_path / 'run'
     options = {} if arms is None else {'arms': arms}
+    options['code_provenance'] = {'git_revision': 'a' * 40, 'git_dirty': False}
     expected_arms = ('frozen', 'late_blocks') if arms is None else arms
     summary = finetune.run_comparison(cache, tmp_path, tmp_path / 'report_labels.csv', output,
                                       tmp_path / 'audit.json', device='cpu', **options)
     assert summary['status'] == 'complete'
+    assert summary['code_provenance'] == options['code_provenance']
+    assert summary['recipe']['target_mode_by_arm'] == {arm: 'public_scores' if arm == 'soft_targets' else 'binary' for arm in expected_arms}
     assert list(summary['arms']) == list(expected_arms)
     assert summary['selected_arms'] == list(expected_arms)
     assert summary['probe']['selected_arms'] == list(expected_arms)
-    assert summary['recipe']['trainable_blocks_by_arm'] == {arm: {'frozen': 0, 'late_blocks': 2, 'deep_blocks': 6}[arm]
+    assert summary['recipe']['trainable_blocks_by_arm'] == {arm: {'frozen': 0, 'late_blocks': 2, 'deep_blocks': 6, 'soft_targets': 2}[arm]
                                                           for arm in expected_arms}
     bound_ids = pd.read_csv(output / 'window_study_ids.csv')[ID_COLUMN].tolist()
     np.testing.assert_array_equal(np.load(output / 'window_indices.npy'), finetune.window_indices(bound_ids))
@@ -315,8 +320,14 @@ def test_complete_two_arm_run_binds_schedule_ids_oof_and_checkpoints(tmp_path, m
         assert submission[ID_COLUMN].tolist() == ['test-a', 'test-b']
         assert len(summary['arms'][arm]['final_fit']['epoch_training_loss']) == 6
         for fit in summary['arms'][arm]['folds'] + [summary['arms'][arm]['final_fit']]:
-            assert fit['encoder_adaptation']['trainable_blocks'] == {'frozen': 0, 'late_blocks': 2, 'deep_blocks': 6}[arm]
+            assert fit['encoder_adaptation']['trainable_blocks'] == {'frozen': 0, 'late_blocks': 2, 'deep_blocks': 6, 'soft_targets': 2}[arm]
             assert fit['encoder_adaptation']['encoder_blocks'] == 8
+            import hashlib
+            mode = 'public_scores' if arm == 'soft_targets' else 'binary'
+            _, targets, weights, _ = finetune.training_partition(labels, fit['heldout_fold'], target_mode=mode)
+            assert fit['target_mode'] == mode
+            assert fit['targets_sha256'] == hashlib.sha256(targets.astype('<f4').tobytes()).hexdigest()
+            assert fit['weights_sha256'] == hashlib.sha256(weights.astype('<f4').tobytes()).hexdigest()
         assert summary['artifact_sha256'][arm + '/model.pt'] == sha256(output / arm / 'model.pt')
     with pytest.raises(FileExistsError):
         finetune.run_comparison(cache, tmp_path, tmp_path / 'report_labels.csv', output,
@@ -367,3 +378,89 @@ def test_real_dinov2_sampled_logits_use_original_thirty_slot_identities():
         expected = (context * model.head.out.weight).sum(-1) + model.head.out.bias
         actual = model(pixels, np.ones((1, 3), np.uint8), windows)[0]
     torch.testing.assert_close(actual, expected, rtol=1e-5, atol=1e-6)
+
+
+def test_soft_targets_preserve_gold_unknowns_and_weighted_rows():
+    _, _, labels = examples()
+    # Each active silver score is retained, even when it is a mild YES or a NO.
+    silver_rows = [2, 5, 8]
+    for target in TARGET_COLUMNS:
+        labels.loc[labels.index[silver_rows], target + '__derived'] = [.08, .68, .94]
+        labels.loc[labels.index[silver_rows], target] = [0, 1, 1]
+        labels.loc[labels.index[silver_rows], target + '__verdict'] = ['NO', 'YES', 'YES']
+        labels.loc[labels.index[0], target + '__derived'] = np.nan
+        labels.loc[labels.index[1], target + '__derived'] = 0.  # Conflicts with observed 1.
+    labels.loc['study-5', TARGET_COLUMNS[1] + '__derived'] = .82
+    unknown = TARGET_COLUMNS[-1]
+    labels.loc['study-8', unknown + '__verdict'] = 'UNK'
+    labels.loc['study-8', unknown + '__mask'] = False
+    labels.loc['study-8', unknown + '__derived'] = .28
+    rows, binary, weights, excluded = finetune.training_partition(labels, None)
+    actual_rows, soft, actual_weights, actual_excluded = finetune.training_partition(labels, None, target_mode='public_scores')
+    np.testing.assert_array_equal(actual_rows, rows)
+    np.testing.assert_array_equal(actual_weights, weights)
+    assert actual_excluded == excluded == 0
+    np.testing.assert_array_equal(soft[weights == 1], binary[weights == 1])
+    np.testing.assert_array_equal(soft[silver_rows, 0], np.array([.08, .68, .94], np.float32))
+    assert soft[5, 1] == np.float32(.82)
+    assert soft[8, -1] == weights[8, -1] == 0
+    logits = torch.zeros_like(torch.from_numpy(soft), requires_grad=True)
+    masked_bce(logits, torch.from_numpy(soft), torch.from_numpy(weights)).backward()
+    assert logits.grad[8, -1] == 0
+    np.testing.assert_array_equal(binary[weights == .25], labels[TARGET_COLUMNS].to_numpy(np.float32)[weights == .25])
+
+
+@pytest.mark.parametrize('value', [np.nan, np.inf, -0.01, 1.01, 'invalid'])
+def test_soft_targets_reject_malformed_active_scores(value):
+    _, _, labels = examples()
+    labels[TARGET_COLUMNS[0] + '__derived'] = labels[TARGET_COLUMNS[0] + '__derived'].astype(object)
+    labels.loc['study-5', TARGET_COLUMNS[0] + '__derived'] = value
+    with pytest.raises(ValueError, match='public score'):
+        finetune.training_partition(labels, 0, target_mode='public_scores')
+
+
+def test_soft_targets_require_active_score_columns_and_binary_gold_support():
+    _, _, labels = examples()
+    missing = labels.drop(columns=TARGET_COLUMNS[0] + '__derived')
+    with pytest.raises(ValueError, match='public score'):
+        finetune.training_partition(missing, 0, target_mode='public_scores')
+    labels.loc['study-3', TARGET_COLUMNS[0] + '__observed'] = .5
+    with pytest.raises(ValueError, match='binary'):
+        finetune.training_partition(labels, 0, target_mode='public_scores')
+    _, _, labels = examples()
+    for target in TARGET_COLUMNS:
+        labels[target] = 1
+        labels[target + '__observed'] = 1
+    with pytest.raises(ValueError, match='both classes'):
+        finetune.training_partition(labels, 0, target_mode='public_scores')
+    with pytest.raises(ValueError, match='target mode'):
+        finetune.training_partition(labels, 0, target_mode='unsupported')
+
+
+def test_probe_steps_use_candidate_scores_and_record_exact_supervision(monkeypatch):
+    import hashlib
+    pixels, presence, labels = examples()
+    calls = []
+    original = finetune.training_step
+    def capture(model, optimizer, scaler, pixels, presence, targets, weights, windows):
+        calls.append((model.arm, targets.copy(), weights.copy()))
+        return original(model, optimizer, scaler, pixels, presence, targets, weights, windows)
+    monkeypatch.setattr(finetune, 'training_step', capture)
+    monkeypatch.setattr(finetune, 'PROBE_STEPS', 1)
+    probe = finetune.throughput_probe(lambda arm: finetune.MRIModel(SmallEncoder(), arm),
+                                     pixels, presence, labels, np.arange(9),
+                                     finetune.window_indices(labels.index), 0,
+                                     arms=('late_blocks', 'soft_targets'))
+    for arm, targets, weights in calls:
+        mode = 'public_scores' if arm == 'soft_targets' else 'binary'
+        _, expected_targets, expected_weights, _ = finetune.training_partition(labels, 0, target_mode=mode)
+        batch = np.arange(8) % 6
+        np.testing.assert_array_equal(targets, expected_targets[batch])
+        np.testing.assert_array_equal(weights, expected_weights[batch])
+        assert probe['supervision_by_arm'][arm] == {
+            'target_mode': mode,
+            'targets_sha256': hashlib.sha256(expected_targets.astype('<f4').tobytes()).hexdigest(),
+            'weights_sha256': hashlib.sha256(expected_weights.astype('<f4').tobytes()).hexdigest()}
+    assert len(calls) == 2
+    assert not np.array_equal(calls[0][1], calls[1][1])
+    np.testing.assert_array_equal(calls[0][2], calls[1][2])

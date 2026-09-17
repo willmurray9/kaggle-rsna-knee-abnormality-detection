@@ -213,7 +213,7 @@ Package only the selected candidate after comparison. For a mean or cached
 attention head, use `rsnaknee.coverage_notebook` or `rsnaknee.window_notebook`,
 respectively, with `--model`, `--features-manifest` and a fresh `--output`. For a
 completed adaptation run, choose the reviewed arm explicitly (`frozen`,
-`late_blocks` or `deep_blocks`) and its actual training kernel. For example,
+`late_blocks`, `deep_blocks` or `soft_targets`) and its actual training kernel. For example,
 if the six-block candidate passes the registered comparison:
 
 ```bash
@@ -235,3 +235,22 @@ Before submission, run the selected package offline on Kaggle and compare all
 three example studies against its saved predictions within absolute tolerance
 `1e-4`. Verify dynamic hidden-test IDs, probabilities and runtime as well; record
 actual submission evidence separately from local validation.
+
+The [preserved-score experiment](soft-target-plan.md) keeps two trainable blocks
+in both arms and changes only eligible report-derived BCE targets. Build from
+the committed, clean source before launching:
+
+```bash
+.venv/bin/python -m rsnaknee.finetune_notebook \
+  --kernel-id willmurray99/rsna-knee-soft-target-training \
+  --arms late_blocks soft_targets \
+  --output artifacts/kaggle/soft-target-training-new-build
+```
+
+The builder records Git revision/dirty state and propagates it into the training
+summary. Each fit and probe records the target mode and SHA-256 hashes of its
+ordered float32 target/weight arrays. Official labels and unknown masks remain
+unchanged. A promoted `soft_targets` checkpoint uses its own training kernel
+with the existing inference packager; mode and depth provenance are verified
+alongside source and weight hashes. These scores are heuristic soft targets,
+not calibrated probabilities or newly extracted labels.
