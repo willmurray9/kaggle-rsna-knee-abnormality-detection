@@ -408,3 +408,58 @@ mean AUC and improvement in at least two folds versus both controls, followed by
 offline inference checks. No outcome or additional submission exists at
 preregistration. The source and recipe will be committed before launch; results
 will be recorded separately.
+
+### Preserved-score outcome: rejected
+
+Private offline notebook `willmurray99/rsna-knee-soft-target-training`, version 1,
+completed on September 17. The complete comparison took **2,039.62 seconds**. The producing
+source was committed and pushed before launch at clean revision
+`45b185d5dda81d94cde0810fbb2597b0213bd9ce`; later CI/test-only commits did not
+change the launched source. The outcome analyzer and its dependencies were
+hashed and frozen before training.
+
+| Recipe | Fold 0 | Fold 1 | Fold 2 | Mean AUC |
+| --- | ---: | ---: | ---: | ---: |
+| Saved two-block reference | 0.780411 | 0.732049 | 0.767272 | **0.759911** |
+| Rerun binary-target control | 0.780411 | 0.732049 | 0.767272 | **0.759911** |
+| Preserved-score candidate | 0.791849 | 0.724937 | 0.763052 | **0.759946** |
+
+The binary control reproduces all 696 OOF probabilities exactly, all 24 recorded
+epoch losses, and all four recorded checkpoint hashes. Both new arms share exact
+training-ID order, supervision weights/counts, saved inputs, window schedule,
+initialization, runtime library versions and two-block architecture. The target
+fingerprints differ as intended for all four fits. Each final fit uses 4,354
+studies. Across all 4,407 rows, the label table still provides 696 official and
+37,920 derived target cells, with 14,268 unknown cells masked. No new labels
+were generated.
+
+The candidate's mean improvement is only **+0.00003512** and just **one of three
+folds improves**, so it fails the registered gate against both controls. The
+conditional paired 95% bootstrap interval is **[−0.022141, +0.019756]**, with
+704 valid draws from 1,000 attempts at seed 20260916. Seven target means improve
+and five decline; no per-target blend or retuning follows these observations.
+This near tie does not establish that soft supervision is generally ineffective.
+The interval excludes training, split and selection uncertainty, and the 58
+gold studies have been repeatedly reused. Patient and public-extractor
+independence remain unresolved.
+
+A separate verifier recomputed official truth from the original `train.csv`,
+fold/target AUCs, the bootstrap and the promotion rule without the primary metric
+helpers. It agreed with the decision and checked training exclusions, target and
+weight fingerprints, source provenance and 60 compact artifact hashes across the
+new and reference runs. Only 46 output files (18.1 MB) were downloaded; checkpoint
+bytes and MRI/pixel data remain on Kaggle. `selection.json` retains the existing
+binary-target checkpoint and public AUC **0.780**. No new inference notebook or
+competition submission was made. Evidence is under
+`artifacts/reports/soft-target-v1/` and
+`artifacts/kaggle/soft-target-training/versions/v1/output/adaptation/`.
+
+Prelaunch verification passed 257 local tests and 256 tests plus one expected
+optional-integration skip from a clean checkout, along with independent code
+review and a generated-notebook smoke build. Added GitHub Actions now runs the
+locked, offline test suite on pull requests and main. Its first Linux run exposed
+two test portability issues: an oversized `python -c` argument and a one-ULP
+cross-batch float32 difference. The fixes execute the same isolated script from a
+temporary file and use the existing 1e-7 numerical tolerance while retaining exact
+ID/order checks. No training or promotion tolerances changed. Fresh Linux CI at
+`58c8f7c` passed **256 tests, one expected skip**.

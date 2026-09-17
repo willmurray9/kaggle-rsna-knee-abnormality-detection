@@ -254,3 +254,9 @@ unchanged. A promoted `soft_targets` checkpoint uses its own training kernel
 with the existing inference packager; mode and depth provenance are verified
 alongside source and weight hashes. These scores are heuristic soft targets,
 not calibrated probabilities or newly extracted labels.
+
+Version 1 completed the matched comparison on September 17. The soft-target
+candidate scored 0.75994585 versus 0.75991074 for the exactly reproduced binary
+control, but improved only one of three folds. It failed the registered promotion
+rule and was not packaged or submitted. The existing binary-target two-block
+model remains selected; see the [outcome and uncertainty](experiments.md).

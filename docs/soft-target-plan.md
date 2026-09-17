@@ -32,8 +32,8 @@ Freeze the selection before any competition submission. A selected checkpoint mu
 
 - [x] **Supervision and training:** modify only `src/rsnaknee/finetune.py` and its tests. Add the fixed two-block soft arm, keyword-only target mode in `training_partition`, and per-fit target/weight SHA-256 fingerprints. Keep binary defaults unchanged. Test official precedence, unknown gradients, all observed public score tiers, invalid active scores, strict binary official labels, exclusion of held-out scores, and actual candidate routing through both probe and training.
 - [x] **Notebook and inference:** modify only `src/rsnaknee/finetune_notebook.py` and its tests. Embed target-mode and Git revision/dirty provenance in the generated job, bind the selected checkpoint to its recipe, and verify both depths and supervision mode during inference. Preserve synthetic-fixture tests and existing notebook defaults. No production API should require access to raw reports at inference.
-- [ ] **Prelaunch gate:** run targeted failure-first tests, `make test`, a clean-checkout test and a generated-notebook smoke build; obtain independent code review. Commit and push the recipe/source before building the launch notebook. Verify a clean Git state, exact revision/source/input hashes, private offline metadata and remaining free quota. Freeze the outcome-analysis script and dependency hashes before launch.
-- [ ] **Evaluate and finish:** verify downloaded compact artifact hashes, unchanged data/folds/windows, training IDs, target/weight fingerprints, parameter counts and producing revision. Independently recompute the promotion decision. If promoted, execute and submit the checked inference notebook and wait for scoring. Commit the outcome documentation separately and merge reviewed commits to main.
+- [x] **Prelaunch gate:** run targeted failure-first tests, `make test`, a clean-checkout test and a generated-notebook smoke build; obtain independent code review. Commit and push the recipe/source before building the launch notebook. Verify a clean Git state, exact revision/source/input hashes, private offline metadata and remaining free quota. Freeze the outcome-analysis script and dependency hashes before launch.
+- [x] **Evaluate and finish:** verify downloaded compact artifact hashes, unchanged data/folds/windows, training IDs, target/weight fingerprints, parameter counts and producing revision. Independently recompute the promotion decision. If promoted, execute and submit the checked inference notebook and wait for scoring. Commit the outcome documentation separately and merge reviewed commits to main.
 
 Expected supervision boundary, illustrated with synthetic values:
 
@@ -47,3 +47,10 @@ targets[derived, column] = scores.loc[derived].to_numpy(dtype='float32')
 ```
 
 Local evidence belongs under ignored `artifacts/reports/soft-target-v1/`; new Kaggle builds use a separate versioned directory and notebook so prior runs remain reproducible.
+
+## Outcome
+
+Completed September 17: soft targets scored 0.75994585 versus 0.75991074,
+improving only one fold. Independent verification agreed with the frozen
+analysis: retain the binary-target model (public AUC 0.780), with no new
+submission. See [the full result](experiments.md) for uncertainty and provenance.

@@ -23,8 +23,10 @@ The September 17 follow-up tested six trainable encoder blocks against the
 current two-block model. Local AUC fell from 0.75991 to 0.74828, so it was rejected
 and our independent public best remains **0.780**. A [fresh 24-report audit](docs/label-sanity-v2.md)
 found threshold mismatches and explicit report/label contradictions; training
-labels remain unchanged. Preserving the public labels' graded scores is now a
-concrete, untested follow-up hypothesis before full report relabeling.
+labels remain unchanged. A subsequent matched test of the public labels' graded
+scores scored 0.75995 versus 0.75991, improving only one of three folds. It failed
+the preregistered promotion rule, so no new competition submission was made.
+The selected model still uses binary public targets; no new labels were generated.
 
 ## Start here
 

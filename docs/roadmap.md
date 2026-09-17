@@ -28,9 +28,13 @@ comparison are complete. The two-block control exactly reproduced its saved
 predictions; six-block adaptation scored 0.74828 versus 0.75991 and was rejected.
 The independent public best remains **0.780**. The [audit](label-sanity-v2.md)
 found threshold mismatches and report contradictions, with most threshold
-disagreements concentrated in lower public score tiers. A matched test of
-preserved graded scores is an evidenced next hypothesis; it has not been run,
-and no audit annotations were added to training.
+disagreements concentrated in lower public score tiers. The subsequent matched
+test of preserved graded scores scored 0.75995 versus 0.75991 but improved only
+one fold and failed promotion. No new submission or training labels resulted;
+the selected model and independent public best remain unchanged. Neither deeper
+adaptation nor this score-softening recipe demonstrated an improvement. A stronger
+reviewed report-extraction pilot remains untested, as do other model changes;
+these comparisons do not establish which explains the remaining performance gap.
 
 ## 1. Working foundation — complete
 
