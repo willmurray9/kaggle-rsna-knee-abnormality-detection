@@ -5,6 +5,7 @@ import base64
 import gzip
 import inspect
 import json
+import subprocess
 import time
 from pathlib import Path
 
@@ -14,7 +15,7 @@ import pandas as pd
 from rsnaknee.constants import ID_COLUMN, TARGET_COLUMNS
 from rsnaknee.coverage_notebook import DISCOVERY, _write_notebook
 from rsnaknee.data import sha256
-from rsnaknee.finetune import ARMS, TRAINABLE_BLOCKS, selected_arms
+from rsnaknee.finetune import ARMS, TARGET_MODES, TRAINABLE_BLOCKS, selected_arms
 from rsnaknee.image_model import read_frozen_labels
 
 SOURCES = ('__init__.py', 'constants.py', 'submission.py', 'data.py', 'baseline.py',
@@ -25,6 +26,14 @@ def build_finetune_notebook(output: Path,
                             kernel_id: str = 'willmurray99/rsna-knee-adaptation-training', *, arms=ARMS):
     arms = selected_arms(arms)
     root = Path(__file__).resolve().parents[2]
+    try:
+        revision = subprocess.run(['git', '-C', str(root), 'rev-parse', 'HEAD'],
+                                  check=True, capture_output=True, text=True).stdout.strip()
+        dirty = bool(subprocess.run(['git', '-C', str(root), 'status', '--porcelain'],
+                                    check=True, capture_output=True, text=True).stdout.strip())
+        code_provenance = {'git_revision': revision, 'git_dirty': dirty}
+    except (OSError, subprocess.CalledProcessError):
+        code_provenance = {'git_revision': None, 'git_dirty': None}
     labels_path = root / 'data/processed/image-v1/report_labels.csv'
     audit_path = root / 'artifacts/reports/label_audit_image_v1.json'
     labels = read_frozen_labels(labels_path, audit_path)
@@ -42,7 +51,7 @@ def build_finetune_notebook(output: Path,
         'import os, sys, json, base64, gzip, hashlib\nfrom pathlib import Path\n'
         'os.environ["HF_HUB_OFFLINE"] = "1"\nos.environ["TRANSFORMERS_OFFLINE"] = "1"\n'
         'os.environ["CUBLAS_WORKSPACE_CONFIG"] = ":4096:8"\n'
-        f'ARMS = {arms!r}\n'
+        f'ARMS = {arms!r}\nCODE_PROVENANCE = {code_provenance!r}\n'
         "working = Path('/kaggle/working')\n"
         'package = working / "rsnaknee"\npackage.mkdir(exist_ok=True)\n'
         f'sources = {sources!r}\n'
@@ -70,21 +79,27 @@ for name in ('train.csv', 'test.csv', 'train_series.csv', 'test_series.csv'):
     if sha256(roots[0] / name) != audit['input_sha256'][name]:
         raise ValueError('Competition metadata changed: ' + name)
 result = run_comparison(cache_dirs[0], checkpoints[0], inputs / 'report_labels.csv',
-                        working / 'adaptation', inputs / 'label_audit.json', device='cuda', arms=ARMS)
+                        working / 'adaptation', inputs / 'label_audit.json', device='cuda', arms=ARMS,
+                        code_provenance=CODE_PROVENANCE)
 print(json.dumps({'status': result['status'], 'probe': result['probe'],
                   'arms': result['arms'], 'runtime_seconds': result['runtime_seconds']}, indent=2))
 '''
     depths = ', '.join(f'{arm}: final {TRAINABLE_BLOCKS[arm]} blocks trainable' for arm in arms)
-    title = 'RSNA Knee Depth Training' if 'deep_blocks' in arms else 'RSNA Knee Adaptation Training'
+    title = ('RSNA Knee Soft Target Training' if 'soft_targets' in arms else
+             'RSNA Knee Depth Training' if 'deep_blocks' in arms else 'RSNA Knee Adaptation Training')
+    targets = ', '.join(f'{arm}: {TARGET_MODES[arm]}' for arm in arms)
     _write_notebook(output, kernel_id, title, 'adaptation-training.ipynb', [
         ('markdown', '# Independent MRI adaptation\n\nMatched uint8-pixel arms: ' + depths + '. '
          'Each adapted arm also trains the final LayerNorm; a frozen arm freezes it. '
+         'Targets: ' + targets + '. Gold stays binary, public unknowns stay masked. '
          'Six fixed epochs, same sampled windows, '
          'whole-fold exclusion, 58 final-epoch gold OOF predictions. A disposable 64-step probe per arm '
          'must project all selected arms, each with three folds and a final refit, below 7.5 hours. '
          'Private pixel cache stays on Kaggle.\n', 'description'),
         ('code', bootstrap, 'bootstrap'), ('code', runtime, 'runtime')],
         {'source_sha256': {name: sha256(package / name) for name in SOURCES},
+         'code_provenance': code_provenance,
+         'target_mode_by_arm': {arm: TARGET_MODES[arm] for arm in arms},
          'selected_arms': list(arms), 'trainable_blocks_by_arm': {arm: TRAINABLE_BLOCKS[arm] for arm in arms},
          'inputs_sha256': hashes, 'contains_reports': False})
     metadata_path = output / 'kernel-metadata.json'
@@ -126,6 +141,31 @@ def predict_test_images(test, series, data_root, predict, *, prepare=None):
     return result
 
 
+def verify_arm_provenance(summary, arm):
+    from rsnaknee.finetune import TARGET_MODES, TRAINABLE_BLOCKS
+
+    fit = summary['arms'][arm]['final_fit']
+    adaptation = fit.get('encoder_adaptation')
+    if adaptation is not None or arm in ('deep_blocks', 'soft_targets'):
+        blocks = TRAINABLE_BLOCKS[arm]
+        total = (adaptation or {}).get('encoder_blocks', 0)
+        if (not adaptation or adaptation.get('arm') != arm or total < blocks
+                or adaptation.get('trainable_blocks') != blocks
+                or adaptation.get('trainable_block_indices') != list(range(total - blocks, total))
+                or adaptation.get('final_layernorm_trainable') != bool(blocks)):
+            raise ValueError('Encoder adaptation provenance differs from chosen arm')
+    if ('target_mode' in fit or 'target_mode_by_arm' in summary.get('recipe', {})
+            or arm == 'soft_targets'):
+        if (fit.get('target_mode') != TARGET_MODES[arm]
+                or summary.get('recipe', {}).get('target_mode_by_arm', {}).get(arm) != TARGET_MODES[arm]):
+            raise ValueError('Target mode provenance differs from chosen arm')
+        for key in ('targets_sha256', 'weights_sha256'):
+            digest = fit.get(key)
+            if (not isinstance(digest, str) or len(digest) != 64
+                    or any(char not in '0123456789abcdef' for char in digest)):
+                raise ValueError('Target/weight provenance hash missing or invalid')
+
+
 def verify_inference_inputs(training_dir, checkpoint_dir, expected):
     from rsnaknee.finetune import TRAINABLE_BLOCKS
 
@@ -137,15 +177,7 @@ def verify_inference_inputs(training_dir, checkpoint_dir, expected):
     if (summary.get('status') != 'complete' or arm not in summary.get('arms', {})
             or arm not in TRAINABLE_BLOCKS):
         raise ValueError('Need completed independent adaptation arm')
-    adaptation = summary['arms'][arm]['final_fit'].get('encoder_adaptation')
-    if adaptation is not None or arm == 'deep_blocks':
-        blocks = TRAINABLE_BLOCKS[arm]
-        total = (adaptation or {}).get('encoder_blocks', 0)
-        if (not adaptation or adaptation.get('arm') != arm or total < blocks
-                or adaptation.get('trainable_blocks') != blocks
-                or adaptation.get('trainable_block_indices') != list(range(total - blocks, total))
-                or adaptation.get('final_layernorm_trainable') != bool(blocks)):
-            raise ValueError('Encoder adaptation provenance differs from chosen arm')
+    verify_arm_provenance(summary, arm)
     model_path = training_dir / arm / 'model.pt'
     if sha256(model_path) != summary['arms'][arm]['final_fit']['checkpoint_sha256']:
         raise ValueError('Chosen independent model hash differs')
@@ -206,6 +238,8 @@ def build_inference_notebook(summary_path: Path, arm: str, output: Path,
     if (summary.get('status') != 'complete' or arm not in summary.get('arms', {})
             or arm not in TRAINABLE_BLOCKS):
         raise ValueError('Choose one completed independent adaptation arm')
+    if arm == 'soft_targets':
+        verify_arm_provenance(summary, arm)
     package = Path(__file__).parent
     for name in SOURCES:
         if sha256(package / name) != summary.get('source_sha256', {}).get(name):
@@ -213,7 +247,7 @@ def build_inference_notebook(summary_path: Path, arm: str, output: Path,
     sources = {name: (package / name).read_text() for name in SOURCES}
     expected = {'summary_sha256': sha256(summary_path), 'arm': arm}
     helpers = '\n\n'.join(inspect.getsource(function) for function in
-                          (predict_test_images, verify_inference_inputs, run_inference))
+                          (predict_test_images, verify_arm_provenance, verify_inference_inputs, run_inference))
     # Helpers live beside the identical training modules so source verification is local.
     sources['adaptation_inference.py'] = (
         'import json, time\nfrom pathlib import Path\nimport numpy as np\nimport pandas as pd\n'
@@ -239,13 +273,15 @@ result = run_inference(roots[0], checkpoints[0], training_dirs[0], EXPECTED, wor
 (working / 'inference_manifest.json').write_text(json.dumps(result, indent=2) + '\\n')
 print(json.dumps(result, indent=2))
 '''
-    title = 'RSNA Knee Deep Image' if arm == 'deep_blocks' else 'RSNA Knee Adapted Image'
+    title = ('RSNA Knee Soft Target Image' if arm == 'soft_targets' else
+             'RSNA Knee Deep Image' if arm == 'deep_blocks' else 'RSNA Knee Adapted Image')
     _write_notebook(output, kernel_id, title, 'adapted-image.ipynb', [
         ('markdown', '# Independent adapted image model\n\nOur own audited generic-initialized weights. '
          'Dynamic test images, identical quantized preprocessing, all thirty windows; no training inputs read.\n', 'description'),
         ('code', bootstrap, 'bootstrap'), ('code', runtime, 'runtime')],
         {'source_sha256': summary['source_sha256'], 'training_summary_sha256': sha256(summary_path),
-         'training_kernel_id': training_kernel_id,
+         'training_kernel_id': training_kernel_id, 'target_mode': TARGET_MODES[arm],
+         'training_code_provenance': summary.get('code_provenance'),
          'arm': arm, 'model_sha256': summary['arms'][arm]['final_fit']['checkpoint_sha256']})
     metadata_path = output / 'kernel-metadata.json'
     metadata = json.loads(metadata_path.read_text())

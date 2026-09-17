@@ -26,7 +26,9 @@ from rsnaknee.window_model import (AttentionHead, BATCH_SIZE, EPOCHS, GENERIC_WE
                                   SEED, build_supervision, masked_bce)
 
 ARMS = ('frozen', 'late_blocks')
-TRAINABLE_BLOCKS = {'frozen': 0, 'late_blocks': 2, 'deep_blocks': 6}
+TRAINABLE_BLOCKS = {'frozen': 0, 'late_blocks': 2, 'deep_blocks': 6, 'soft_targets': 2}
+TARGET_MODES = {'frozen': 'binary', 'late_blocks': 'binary', 'deep_blocks': 'binary',
+                'soft_targets': 'public_scores'}
 BUDGET_SECONDS = 7.5 * 3600
 PROBE_STEPS = 64
 
@@ -137,7 +139,9 @@ def make_optimizer(model: MRIModel):
     return torch.optim.AdamW(groups, weight_decay=.02)
 
 
-def training_partition(labels: pd.DataFrame, heldout_fold):
+def training_partition(labels: pd.DataFrame, heldout_fold, *, target_mode='binary'):
+    if target_mode not in ('binary', 'public_scores'):
+        raise ValueError('Unknown target mode')
     if (labels.index.has_duplicates or labels[['fold', 'group_id']].isna().any().any()
             or labels.groupby('group_id')['fold'].nunique().gt(1).any()):
         raise ValueError('Invalid unique studies or frozen report group assignments')
@@ -153,7 +157,25 @@ def training_partition(labels: pd.DataFrame, heldout_fold):
     for column, target in enumerate(TARGET_COLUMNS):
         if np.unique(targets[weights[:, column] > 0, column]).size != 2:
             raise ValueError(f'Training target lacks both classes: {target}')
+    if target_mode == 'public_scores':
+        for column, target in enumerate(TARGET_COLUMNS):
+            silver = weights[:, column] == .25
+            if not silver.any():
+                continue
+            if target + '__derived' not in labels:
+                raise ValueError('Missing active public scores: ' + target)
+            scores = pd.to_numeric(labels.iloc[rows[silver]][target + '__derived'], errors='coerce').to_numpy(dtype=float)
+            if not np.isfinite(scores).all() or np.any((scores < 0) | (scores > 1)):
+                raise ValueError('Invalid active public scores: ' + target)
+            targets[silver, column] = scores.astype(np.float32)
     return rows[usable], targets[usable], weights[usable], int((~keep).sum())
+
+
+def supervision_provenance(target_mode, targets, weights):
+    # Bound to the separately saved training ID order and fixed TARGET_COLUMNS.
+    return {'target_mode': target_mode,
+            'targets_sha256': hashlib.sha256(targets.astype('<f4').tobytes(order='C')).hexdigest(),
+            'weights_sha256': hashlib.sha256(weights.astype('<f4').tobytes(order='C')).hexdigest()}
 
 
 def training_step(model, optimizer, scaler, pixels, presence, targets, weights, windows):
@@ -171,7 +193,8 @@ def training_step(model, optimizer, scaler, pixels, presence, targets, weights, 
 
 def train_fold(factory, arm, pixels, presence, labels, cache_rows, table, heldout_fold):
     started = time.perf_counter()
-    rows, targets, weights, excluded = training_partition(labels, heldout_fold)
+    mode = TARGET_MODES[arm]
+    rows, targets, weights, excluded = training_partition(labels, heldout_fold, target_mode=mode)
     torch.manual_seed(SEED)
     model = factory(arm).train()
     optimizer = make_optimizer(model)
@@ -191,6 +214,7 @@ def train_fold(factory, arm, pixels, presence, labels, cache_rows, table, heldou
         print(f'{arm} fold={heldout_fold} epoch={epoch + 1}/{EPOCHS} loss={history[-1]:.6f}', flush=True)
     return model.eval(), {'heldout_fold': heldout_fold, 'training_ids': labels.index[rows].tolist(),
                          'encoder_adaptation': model.training_provenance(),
+                         **supervision_provenance(mode, targets, weights),
                          'excluded_fold_studies': excluded, 'epoch_training_loss': history,
                          'runtime_seconds': time.perf_counter() - started,
                          'target_counts': {target: {'observed': int((weights[:, i] == 1).sum()),
@@ -226,13 +250,15 @@ def project_runtime(step_seconds, training_steps, inference_seconds_per_study, i
 
 def throughput_probe(factory, pixels, presence, labels, cache_rows, table, elapsed, *, arms=ARMS):
     arms = selected_arms(arms)
-    rows, targets, weights, _ = training_partition(labels, 0)
     device = 'cuda' if torch.cuda.is_available() else 'cpu'
-    seconds, inference, adaptation = {}, [], {}
+    seconds, inference, adaptation, supervision = {}, [], {}, {}
     start_probe = time.perf_counter()
     # Disposable models and forked RNG ensure the probe cannot seed actual fits.
     with torch.random.fork_rng(devices=list(range(torch.cuda.device_count()))):
         for arm in arms:
+            mode = TARGET_MODES[arm]
+            rows, targets, weights, _ = training_partition(labels, 0, target_mode=mode)
+            supervision[arm] = supervision_provenance(mode, targets, weights)
             torch.manual_seed(SEED)
             model = factory(arm).train()
             adaptation[arm] = model.training_provenance()
@@ -265,6 +291,7 @@ def throughput_probe(factory, pixels, presence, labels, cache_rows, table, elaps
     projected = project_runtime(seconds, steps, max(inference), int(gold) + test_count,
                                 elapsed + time.perf_counter() - start_probe)
     return {'selected_arms': list(arms), 'encoder_adaptation': adaptation,
+            'supervision_by_arm': supervision,
             'steps_per_arm': PROBE_STEPS, 'training_fold_excluded': 0,
             'seconds_per_step': seconds, 'total_training_steps_per_arm': steps,
             'inference_seconds_per_study': max(inference), 'projected_total_seconds': projected,
@@ -321,7 +348,8 @@ def read_pixel_cache(cache_dir: Path, audit: dict):
 
 
 def run_comparison(cache_dir: Path, checkpoint_dir: Path, labels_path: Path, output: Path,
-                   audit_path: Path = Path('artifacts/reports/label_audit_image_v1.json'), device='cuda', *, arms=ARMS):
+                   audit_path: Path = Path('artifacts/reports/label_audit_image_v1.json'), device='cuda', *,
+                   arms=ARMS, code_provenance=None):
     from transformers import AutoModel
 
     arms = selected_arms(arms)
@@ -364,8 +392,10 @@ def run_comparison(cache_dir: Path, checkpoint_dir: Path, labels_path: Path, out
     for source in sorted(Path(__file__).parent.glob('*.py')):
         shutil.copy2(source, source_dir / source.name)
     summary = {'status': 'probing', 'arms': {}, 'selected_arms': list(arms), 'checkpoint': provenance,
+               'code_provenance': code_provenance,
                'recipe': {'epochs': EPOCHS, 'effective_batch_size': BATCH_SIZE, 'seed': SEED,
                           'trainable_blocks_by_arm': {arm: TRAINABLE_BLOCKS[arm] for arm in arms},
+                          'target_mode_by_arm': {arm: TARGET_MODES[arm] for arm in arms},
                           'head_learning_rate': .001, 'backbone_learning_rate': .000008, 'weight_decay': .02,
                           'hidden': 128, 'dropout': .2, 'silver_weight': .25, 'loss': 'BCE mean over batch x 12',
                           'train_windows_per_plane': 1, 'inference_windows_per_plane': 10,

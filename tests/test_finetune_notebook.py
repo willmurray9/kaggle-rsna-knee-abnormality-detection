@@ -40,14 +40,14 @@ def synthetic_training_repo(tmp_path, monkeypatch):
     return root
 
 
-@pytest.mark.parametrize('arms', [None, ('late_blocks', 'deep_blocks')])
+@pytest.mark.parametrize('arms', [None, ('late_blocks', 'deep_blocks'), ('late_blocks', 'soft_targets')])
 def test_private_offline_notebook_restores_exact_audited_inputs_and_sources(tmp_path, arms, synthetic_training_repo):
     output = tmp_path / 'build'
     options = {} if arms is None else {'arms': arms}
     expected_arms = ('frozen', 'late_blocks') if arms is None else arms
     build_finetune_notebook(output, **options)
     metadata = json.loads((output / 'kernel-metadata.json').read_text())
-    assert metadata['title'] == ('RSNA Knee Depth Training' if arms else 'RSNA Knee Adaptation Training')
+    assert metadata['title'] == ('RSNA Knee Soft Target Training' if arms and 'soft_targets' in arms else 'RSNA Knee Depth Training' if arms else 'RSNA Knee Adaptation Training')
     assert metadata['is_private'] is True and metadata['enable_internet'] is False
     assert metadata['enable_gpu'] is True and metadata['machine_shape'] == 'NvidiaTeslaT4'
     assert metadata['kernel_sources'] == ['willmurray99/rsna-knee-coverage-features']
@@ -71,9 +71,13 @@ def test_private_offline_notebook_restores_exact_audited_inputs_and_sources(tmp_
         assert source.read_bytes() == (root / 'src/rsnaknee' / source.name).read_bytes()
     assert namespace['os'].environ['CUBLAS_WORKSPACE_CONFIG'] == ':4096:8'
     assert namespace['ARMS'] == expected_arms
+    assert namespace['CODE_PROVENANCE'] == {'git_revision': None, 'git_dirty': None}
     manifest = json.loads((output / 'build_manifest.json').read_text())
     assert manifest['selected_arms'] == list(expected_arms)
-    assert manifest['trainable_blocks_by_arm'] == {arm: {'frozen': 0, 'late_blocks': 2, 'deep_blocks': 6}[arm]
+    assert manifest['code_provenance'] == namespace['CODE_PROVENANCE']
+    assert manifest['target_mode_by_arm'] == {arm: 'public_scores' if arm == 'soft_targets' else 'binary' for arm in expected_arms}
+    assert 'code_provenance=CODE_PROVENANCE' in code['runtime']
+    assert manifest['trainable_blocks_by_arm'] == {arm: {'frozen': 0, 'late_blocks': 2, 'deep_blocks': 6, 'soft_targets': 2}[arm]
                                                  for arm in expected_arms}
     assert manifest['kernel_metadata_sha256'] == sha256(output / 'kernel-metadata.json')
     assert manifest['notebook_sha256'] == sha256(output / metadata['code_file'])
@@ -157,7 +161,7 @@ def test_inference_builder_attaches_own_weights_and_rejects_unbound_sources(tmp_
         build_inference_notebook(path, arm, tmp_path / 'bad', **options)
 
 
-@pytest.mark.parametrize('arm', ['late_blocks', 'deep_blocks'])
+@pytest.mark.parametrize('arm', ['late_blocks', 'deep_blocks', 'soft_targets'])
 def test_inference_verifies_attached_model_sources_and_generic_config(tmp_path, arm):
     from rsnaknee.finetune_notebook import SOURCES, verify_inference_inputs
     root = Path(__file__).resolve().parents[1]
@@ -177,11 +181,15 @@ def test_inference_verifies_attached_model_sources_and_generic_config(tmp_path, 
     summary = {'status': 'complete', 'arms': {arm: {'final_fit': {'checkpoint_sha256': sha256(model_path)}}},
                'source_sha256': {name: sha256(training / 'source' / name) for name in SOURCES},
                'feature_manifest_sha256': sha256(training / 'feature_manifest.json'), 'checkpoint': checkpoint}
-    if arm == 'deep_blocks':
+    if arm in ('deep_blocks', 'soft_targets'):
+        blocks = 6 if arm == 'deep_blocks' else 2
         summary['arms'][arm]['final_fit']['encoder_adaptation'] = {
-            'arm': arm, 'encoder_blocks': 12, 'trainable_blocks': 6,
-            'trainable_block_indices': [6, 7, 8, 9, 10, 11], 'final_layernorm_trainable': True,
+            'arm': arm, 'encoder_blocks': 12, 'trainable_blocks': blocks,
+            'trainable_block_indices': list(range(12 - blocks, 12)), 'final_layernorm_trainable': True,
             'encoder_trainable_parameters': 1000, 'head_trainable_parameters': 100}
+    if arm == 'soft_targets':
+        summary['recipe'] = {'target_mode_by_arm': {arm: 'public_scores'}}
+        summary['arms'][arm]['final_fit'].update(target_mode='public_scores', targets_sha256='a' * 64, weights_sha256='b' * 64)
     (training / 'summary.json').write_text(json.dumps(summary))
     expected = {'summary_sha256': sha256(training / 'summary.json'), 'arm': arm}
     actual, _ = verify_inference_inputs(training, tmp_path, expected)
@@ -194,8 +202,8 @@ def test_inference_verifies_attached_model_sources_and_generic_config(tmp_path, 
     with pytest.raises(ValueError, match='architecture hash'):
         verify_inference_inputs(training, tmp_path, expected)
     config.write_text('{"model_type":"dinov2","hidden_size":384}')
-    if arm == 'deep_blocks':
-        summary['arms'][arm]['final_fit']['encoder_adaptation']['trainable_blocks'] = 2
+    if arm in ('deep_blocks', 'soft_targets'):
+        summary['arms'][arm]['final_fit']['encoder_adaptation']['trainable_blocks'] = 99
         (training / 'summary.json').write_text(json.dumps(summary))
         expected['summary_sha256'] = sha256(training / 'summary.json')
         with pytest.raises(ValueError, match='adaptation provenance'):
@@ -207,13 +215,13 @@ def test_inference_verifies_attached_model_sources_and_generic_config(tmp_path, 
             verify_inference_inputs(training, tmp_path, expected)
 
 
-@pytest.mark.parametrize('arm,blocks', [('late_blocks', 3), ('deep_blocks', 7)])
+@pytest.mark.parametrize('arm,blocks', [('late_blocks', 3), ('deep_blocks', 7), ('soft_targets', 3)])
 def test_generated_isolated_package_runs_real_dinov2_training_and_inference(tmp_path, arm, blocks, synthetic_training_repo):
     import os
     import subprocess
     import sys
     output = tmp_path / 'build'
-    build_finetune_notebook(output, arms=('late_blocks', 'deep_blocks'))
+    build_finetune_notebook(output, arms=('late_blocks', arm) if arm != 'late_blocks' else ('late_blocks',))
     notebook = json.loads((output / 'adaptation-training.ipynb').read_text())
     bootstrap = ''.join(next(cell for cell in notebook['cells'] if cell['metadata']['role'] == 'bootstrap')['source'])
     working = tmp_path / 'isolated'
@@ -235,8 +243,12 @@ optimizer = make_optimizer(model)
 scaler = torch.amp.GradScaler('cuda', enabled=False)
 pixels = np.random.default_rng(8).integers(0, 256, (2, 3, 12, 28, 28), dtype=np.uint8)
 flags = np.ones((2, 3), np.uint8)
-loss = training_step(model, optimizer, scaler, pixels, flags, np.zeros((2, 12), np.float32),
-                     np.ones((2, 12), np.float32), np.array([[0, 1, 2], [7, 8, 9]]))
+_, targets, weights, _ = implementation.training_partition(labels, 0, target_mode=implementation.TARGET_MODES[model.arm])
+assert implementation.TARGET_MODES[model.arm] == ('public_scores' if model.arm == 'soft_targets' else 'binary')
+if model.arm == 'soft_targets':
+    assert targets[2, 0] == np.float32(.82) and weights[2, 0] == .25
+loss = training_step(model, optimizer, scaler, pixels, flags, targets[1:3],
+                     weights[1:3], np.array([[0, 1, 2], [7, 8, 9]]))
 assert np.isfinite(loss)
 assert encoder.encoder.layer[0].attention.attention.query.weight.grad is None
 assert encoder.encoder.layer[-1].attention.attention.query.weight.grad is not None
@@ -250,7 +262,71 @@ print('isolated tiny DINOv2 training/inference passed')
 '''
     script = script.replace('num_hidden_layers=3', f'num_hidden_layers={blocks}').replace("MRIModel(encoder, 'late_blocks')", f'MRIModel(encoder, {arm!r})')
     env = dict(os.environ, PYTHONPATH=str(working), HF_HUB_OFFLINE='1', TRANSFORMERS_OFFLINE='1')
-    completed = subprocess.run([sys.executable, '-c', script], cwd=working, env=env,
+    # The embedded package exceeds Linux's limit for a single command argument.
+    script_path = working / 'exercise_package.py'
+    script_path.write_text(script)
+    completed = subprocess.run([sys.executable, str(script_path)], cwd=working, env=env,
                                 capture_output=True, text=True, timeout=120)
     assert completed.returncode == 0, completed.stdout + completed.stderr
     assert 'isolated tiny DINOv2 training/inference passed' in completed.stdout
+
+
+def test_training_build_records_real_git_revision_and_dirty_state(tmp_path, synthetic_training_repo):
+    import subprocess
+    root = synthetic_training_repo
+    def git(*args):
+        return subprocess.run(['git', '-C', str(root), *args], check=True, capture_output=True, text=True).stdout.strip()
+    git('init')
+    git('add', '.')
+    git('-c', 'user.name=Test', '-c', 'user.email=test@example.com', 'commit', '-m', 'Synthetic fixture')
+    clean = tmp_path / 'clean-build'
+    build_finetune_notebook(clean, arms=('late_blocks', 'soft_targets'))
+    expected = {'git_revision': git('rev-parse', 'HEAD'), 'git_dirty': False}
+    assert json.loads((clean / 'build_manifest.json').read_text())['code_provenance'] == expected
+    (root / 'uncommitted.txt').write_text('dirty')
+    dirty = tmp_path / 'dirty-build'
+    build_finetune_notebook(dirty, arms=('late_blocks', 'soft_targets'))
+    assert json.loads((dirty / 'build_manifest.json').read_text())['code_provenance'] == dict(expected, git_dirty=True)
+
+
+def test_soft_inference_requires_target_depth_and_hash_provenance(tmp_path):
+    from rsnaknee.finetune_notebook import SOURCES, build_inference_notebook, verify_arm_provenance
+    root = Path(__file__).resolve().parents[1]
+    arm = 'soft_targets'
+    fit = {'checkpoint_sha256': 'c' * 64, 'target_mode': 'public_scores',
+           'targets_sha256': 'a' * 64, 'weights_sha256': 'b' * 64,
+           'encoder_adaptation': {'arm': arm, 'encoder_blocks': 12, 'trainable_blocks': 2,
+                                  'trainable_block_indices': [10, 11], 'final_layernorm_trainable': True}}
+    summary = {'status': 'complete', 'arms': {arm: {'final_fit': fit}},
+               'recipe': {'target_mode_by_arm': {arm: 'public_scores'}},
+               'code_provenance': {'git_revision': 'd' * 40, 'git_dirty': False},
+               'source_sha256': {name: sha256(root / 'src/rsnaknee' / name) for name in SOURCES}}
+    verify_arm_provenance(summary, arm)
+    path = tmp_path / 'summary.json'
+    path.write_text(json.dumps(summary))
+    output = tmp_path / 'soft-inference'
+    build_inference_notebook(path, arm, output, training_kernel_id='willmurray99/rsna-knee-soft-target-training')
+    metadata = json.loads((output / 'kernel-metadata.json').read_text())
+    manifest = json.loads((output / 'build_manifest.json').read_text())
+    assert metadata['title'] == 'RSNA Knee Soft Target Image'
+    assert metadata['kernel_sources'] == ['willmurray99/rsna-knee-soft-target-training']
+    assert manifest['target_mode'] == 'public_scores'
+    assert manifest['training_code_provenance'] == summary['code_provenance']
+    for field, changed in [('target_mode', 'binary'), ('targets_sha256', 'bad'),
+                           ('weights_sha256', None), ('encoder_adaptation', None)]:
+        original = fit[field]
+        fit[field] = changed
+        with pytest.raises(ValueError, match='provenance'):
+            verify_arm_provenance(summary, arm)
+        fit[field] = original
+    summary['recipe']['target_mode_by_arm'][arm] = 'binary'
+    with pytest.raises(ValueError, match='provenance'):
+        verify_arm_provenance(summary, arm)
+
+
+def test_new_binary_run_cannot_drop_target_provenance():
+    from rsnaknee.finetune_notebook import verify_arm_provenance
+    summary = {'recipe': {'target_mode_by_arm': {'late_blocks': 'binary'}},
+               'arms': {'late_blocks': {'final_fit': {}}}}
+    with pytest.raises(ValueError, match='Target mode provenance'):
+        verify_arm_provenance(summary, 'late_blocks')

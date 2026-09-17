@@ -23,8 +23,10 @@ The September 17 follow-up tested six trainable encoder blocks against the
 current two-block model. Local AUC fell from 0.75991 to 0.74828, so it was rejected
 and our independent public best remains **0.780**. A [fresh 24-report audit](docs/label-sanity-v2.md)
 found threshold mismatches and explicit report/label contradictions; training
-labels remain unchanged. Preserving the public labels' graded scores is now a
-concrete, untested follow-up hypothesis before full report relabeling.
+labels remain unchanged. A subsequent matched test of the public labels' graded
+scores scored 0.75995 versus 0.75991, improving only one of three folds. It failed
+the preregistered promotion rule, so no new competition submission was made.
+The selected model still uses binary public targets; no new labels were generated.
 
 ## Start here
 
@@ -63,6 +65,7 @@ artifacts/kaggle/       Private notebook builds, run logs and submission evidenc
 `make test` uses synthetic fixtures and runs without competition data or Kaggle
 credentials. One optional public-reference integration check skips when its
 separately downloaded, audited source notebook and manifest are unavailable.
+GitHub Actions runs the same tests on pushes to `main` and pull requests using Python 3.12 and the locked dependencies on a CPU runner.
 
 `make metadata-baseline` compares constant 0.5, training-fold prevalence and regularized logistic regression using series counts on the frozen split. It saves a new timestamped run and refuses to overwrite existing experiments. [EDA](docs/eda.md) explains the split and missing-label handling; [experiments](docs/experiments.md) records the fixed recipe, uncertainty and error review. Validation is study/report-grouped, with unresolved patient overlap. The model uses only the 58 observed-label cases and metadata available at inference.
 
