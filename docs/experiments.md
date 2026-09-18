@@ -469,3 +469,15 @@ existing checkpoint test: reversing 18 inputs changes which studies occupy the
 eight-row versus two-row batches. That test now separates exact saved-weight and
 same-order prediction roundtrips from the 1e-7-tolerant reordered prediction check.
 This is a test-only correction; the model and experimental decision are unchanged.
+
+## Three training windows per plane: preregistered September 18
+
+Following the user's approval, compare the existing one-window `late_blocks`
+control with `multi_windows`, using three distinct three-slice windows per plane
+jointly during training. Each encoder vector remains 768-dimensional; architecture,
+binary labels, saved folds, six epochs and all-ten-window inference remain fixed.
+The candidate includes each control window plus two independently hash-selected
+positions. No labels are added. The complete recipe, memory/runtime probe,
+control-reproduction requirement and promotion rule are fixed in
+[the experiment plan](multi-window-plan.md). Commit and push source before launch;
+record the outcome separately, whether successful or rejected.
