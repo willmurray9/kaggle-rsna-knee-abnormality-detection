@@ -2,7 +2,7 @@
 
 A small, explainable starting point for the [Kaggle competition](https://www.kaggle.com/competitions/rsna-knee-abnormality-detection), using the same basic structure as our soil-grain project.
 
-**Status:** our independently trained model's best public AUC is **0.780**, up from **0.718** for the frozen image baseline and **0.508** for metadata. Limited DINOv2 adaptation achieved local AUC **0.75991** on the same 58 explicit-label studies; submission **56290319** completed successfully. A separate reproduction of a public competition-trained ensemble scored **0.891**; it has no valid local CV on our folds. The [independent improvement pass](docs/independent-improvement-plan.md) is complete. See [experiments](docs/experiments.md) and [submission evidence](docs/submissions.md). Final deadline: **October 22, 2026, 23:59 UTC**.
+**Status:** our independently trained model's best public AUC is **0.801**, up from **0.780** for one-window encoder adaptation, **0.718** for the frozen image baseline and **0.508** for metadata. Three-window training achieved local AUC **0.77478** on the same 58 explicit-label studies; submission **56341808** completed successfully. A separate reproduction of a public competition-trained ensemble scored **0.891**; it has no valid local CV on our folds. The [independent improvement pass](docs/independent-improvement-plan.md) and [three-window follow-up](docs/multi-window-plan.md) are complete. See [experiments](docs/experiments.md) and [submission evidence](docs/submissions.md). Final deadline: **October 22, 2026, 23:59 UTC**.
 
 The key challenge is supervision: the current training CSV has **4,407 studies**, but only **58 have the 12 condition labels**. All have reports; test studies do not. Missing labels must stay unknown. See [competition details](docs/competition.md) and the [roadmap](docs/roadmap.md).
 
@@ -27,6 +27,13 @@ labels remain unchanged. A subsequent matched test of the public labels' graded
 scores scored 0.75995 versus 0.75991, improving only one of three folds. It failed
 the preregistered promotion rule, so no new competition submission was made.
 The selected model still uses binary public targets; no new labels were generated.
+
+The September 18 [three-window comparison](docs/multi-window-plan.md) improved
+local AUC from **0.75991 to 0.77478**, with gains in all three folds. It keeps
+three slices and 768 features per window while training jointly on three windows
+per plane. Labels and model parameter counts are unchanged. Offline inference
+matched the saved predictions exactly; submission **56341808** completed with
+public AUC **0.801**, our new independent best, **+0.021** over 0.780.
 
 ## Start here
 

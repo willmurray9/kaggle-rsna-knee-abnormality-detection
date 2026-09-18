@@ -36,6 +36,15 @@ adaptation nor this score-softening recipe demonstrated an improvement. A strong
 reviewed report-extraction pilot remains untested, as do other model changes;
 these comparisons do not establish which explains the remaining performance gap.
 
+**September 18 follow-up:** jointly training on three windows per plane improved
+local AUC to **0.77478** from the exactly reproduced **0.75991** control. All
+three folds improved, passing the fixed promotion rule, although the paired
+bootstrap interval includes zero. The model keeps three slices and 768 features
+per window, the same architecture and binary labels, and all ten windows per
+plane at inference. Offline predictions matched exactly and submission
+**56341808** completed with public AUC **0.801**, improving our independent best
+by **0.021**. See [the plan and outcome](multi-window-plan.md).
+
 ## 1. Working foundation — complete
 
 Audit the actual CSVs, preserve missing labels, verify macro AUC and submission format, and produce a constant 0.5 sanity output. AUC 0.5 is expected for constant predictions; it measures neither image understanding nor generalization. The included notebook's hosted execution has now passed.

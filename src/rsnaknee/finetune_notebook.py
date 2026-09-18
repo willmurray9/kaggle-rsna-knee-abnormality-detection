@@ -15,7 +15,7 @@ import pandas as pd
 from rsnaknee.constants import ID_COLUMN, TARGET_COLUMNS
 from rsnaknee.coverage_notebook import DISCOVERY, _write_notebook
 from rsnaknee.data import sha256
-from rsnaknee.finetune import ARMS, TARGET_MODES, TRAINABLE_BLOCKS, selected_arms
+from rsnaknee.finetune import ARMS, TARGET_MODES, TRAINABLE_BLOCKS, TRAIN_WINDOWS_PER_PLANE, selected_arms
 from rsnaknee.image_model import read_frozen_labels
 
 SOURCES = ('__init__.py', 'constants.py', 'submission.py', 'data.py', 'baseline.py',
@@ -85,14 +85,17 @@ print(json.dumps({'status': result['status'], 'probe': result['probe'],
                   'arms': result['arms'], 'runtime_seconds': result['runtime_seconds']}, indent=2))
 '''
     depths = ', '.join(f'{arm}: final {TRAINABLE_BLOCKS[arm]} blocks trainable' for arm in arms)
-    title = ('RSNA Knee Soft Target Training' if 'soft_targets' in arms else
+    title = ('RSNA Knee Multi Window Training' if 'multi_windows' in arms else
+             'RSNA Knee Soft Target Training' if 'soft_targets' in arms else
              'RSNA Knee Depth Training' if 'deep_blocks' in arms else 'RSNA Knee Adaptation Training')
     targets = ', '.join(f'{arm}: {TARGET_MODES[arm]}' for arm in arms)
+    windows = ', '.join(f'{arm}: {TRAIN_WINDOWS_PER_PLANE[arm]}' for arm in arms)
     _write_notebook(output, kernel_id, title, 'adaptation-training.ipynb', [
         ('markdown', '# Independent MRI adaptation\n\nMatched uint8-pixel arms: ' + depths + '. '
          'Each adapted arm also trains the final LayerNorm; a frozen arm freezes it. '
          'Targets: ' + targets + '. Gold stays binary, public unknowns stay masked. '
-         'Six fixed epochs, same sampled windows, '
+         'Training windows per plane: ' + windows + '. Each window has three sampled slices and a '
+         '768-dimensional encoder vector; prediction uses all ten windows per plane. Six fixed epochs, '
          'whole-fold exclusion, 58 final-epoch gold OOF predictions. A disposable 64-step probe per arm '
          'must project all selected arms, each with three folds and a final refit, below 7.5 hours. '
          'Private pixel cache stays on Kaggle.\n', 'description'),
@@ -100,6 +103,7 @@ print(json.dumps({'status': result['status'], 'probe': result['probe'],
         {'source_sha256': {name: sha256(package / name) for name in SOURCES},
          'code_provenance': code_provenance,
          'target_mode_by_arm': {arm: TARGET_MODES[arm] for arm in arms},
+         'train_windows_per_plane': {arm: TRAIN_WINDOWS_PER_PLANE[arm] for arm in arms},
          'selected_arms': list(arms), 'trainable_blocks_by_arm': {arm: TRAINABLE_BLOCKS[arm] for arm in arms},
          'inputs_sha256': hashes, 'contains_reports': False})
     metadata_path = output / 'kernel-metadata.json'
@@ -142,11 +146,11 @@ def predict_test_images(test, series, data_root, predict, *, prepare=None):
 
 
 def verify_arm_provenance(summary, arm):
-    from rsnaknee.finetune import TARGET_MODES, TRAINABLE_BLOCKS
+    from rsnaknee.finetune import TARGET_MODES, TRAINABLE_BLOCKS, TRAIN_WINDOWS_PER_PLANE
 
     fit = summary['arms'][arm]['final_fit']
     adaptation = fit.get('encoder_adaptation')
-    if adaptation is not None or arm in ('deep_blocks', 'soft_targets'):
+    if adaptation is not None or arm in ('deep_blocks', 'soft_targets', 'multi_windows'):
         blocks = TRAINABLE_BLOCKS[arm]
         total = (adaptation or {}).get('encoder_blocks', 0)
         if (not adaptation or adaptation.get('arm') != arm or total < blocks
@@ -155,7 +159,7 @@ def verify_arm_provenance(summary, arm):
                 or adaptation.get('final_layernorm_trainable') != bool(blocks)):
             raise ValueError('Encoder adaptation provenance differs from chosen arm')
     if ('target_mode' in fit or 'target_mode_by_arm' in summary.get('recipe', {})
-            or arm == 'soft_targets'):
+            or arm in ('soft_targets', 'multi_windows')):
         if (fit.get('target_mode') != TARGET_MODES[arm]
                 or summary.get('recipe', {}).get('target_mode_by_arm', {}).get(arm) != TARGET_MODES[arm]):
             raise ValueError('Target mode provenance differs from chosen arm')
@@ -164,9 +168,29 @@ def verify_arm_provenance(summary, arm):
             if (not isinstance(digest, str) or len(digest) != 64
                     or any(char not in '0123456789abcdef' for char in digest)):
                 raise ValueError('Target/weight provenance hash missing or invalid')
+    if ('train_windows_per_plane' in fit or 'window_schedule_by_arm' in summary
+            or isinstance(summary.get('recipe', {}).get('train_windows_per_plane'), dict)
+            or arm == 'multi_windows'):
+        count = TRAIN_WINDOWS_PER_PLANE[arm]
+        counts = summary.get('recipe', {}).get('train_windows_per_plane')
+        schedules = summary.get('window_schedule_by_arm')
+        schedule = schedules.get(arm, {}) if isinstance(schedules, dict) else {}
+        artifact = 'multi_window_indices.npy' if count == 3 else 'window_indices.npy'
+        if (not isinstance(counts, dict) or counts.get(arm) != count
+                or fit.get('train_windows_per_plane') != count
+                or not isinstance(schedule, dict)
+                or schedule.get('train_windows_per_plane') != count
+                or schedule.get('artifact') != artifact
+                or fit.get('window_schedule_sha256') != schedule.get('window_schedule_sha256')):
+            raise ValueError('Window schedule provenance differs from chosen arm')
+        for digest in (schedule.get('window_schedule_sha256'), summary.get(Path(artifact).stem + '_sha256')):
+            if (not isinstance(digest, str) or len(digest) != 64
+                    or any(char not in '0123456789abcdef' for char in digest)):
+                raise ValueError('Window schedule provenance hash missing or invalid')
 
 
 def verify_inference_inputs(training_dir, checkpoint_dir, expected):
+    import hashlib
     from rsnaknee.finetune import TRAINABLE_BLOCKS
 
     summary_path = training_dir / 'summary.json'
@@ -178,6 +202,14 @@ def verify_inference_inputs(training_dir, checkpoint_dir, expected):
             or arm not in TRAINABLE_BLOCKS):
         raise ValueError('Need completed independent adaptation arm')
     verify_arm_provenance(summary, arm)
+    schedule = summary.get('window_schedule_by_arm', {}).get(arm)
+    if schedule is not None:
+        path = training_dir / schedule['artifact']
+        if not path.is_file() or sha256(path) != summary[path.stem + '_sha256']:
+            raise ValueError('Window schedule provenance file hash differs')
+        table = np.load(path, allow_pickle=False)
+        if hashlib.sha256(table.tobytes(order='C')).hexdigest() != schedule['window_schedule_sha256']:
+            raise ValueError('Window schedule provenance table hash differs')
     model_path = training_dir / arm / 'model.pt'
     if sha256(model_path) != summary['arms'][arm]['final_fit']['checkpoint_sha256']:
         raise ValueError('Chosen independent model hash differs')
@@ -224,6 +256,8 @@ def run_inference(data_root, checkpoint_dir, training_dir, expected, output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
     submission.to_csv(output_dir / 'submission.csv', index=False)
     return {'status': 'complete', 'studies': len(submission), 'arm': expected['arm'],
+            'train_windows_per_plane': summary['arms'][expected['arm']]['final_fit'].get('train_windows_per_plane', 1),
+            'window_schedule_sha256': summary['arms'][expected['arm']]['final_fit'].get('window_schedule_sha256'),
             'training_summary_sha256': expected['summary_sha256'],
             'model_sha256': summary['arms'][expected['arm']]['final_fit']['checkpoint_sha256'],
             'runtime_seconds': time.perf_counter() - started,
@@ -238,7 +272,7 @@ def build_inference_notebook(summary_path: Path, arm: str, output: Path,
     if (summary.get('status') != 'complete' or arm not in summary.get('arms', {})
             or arm not in TRAINABLE_BLOCKS):
         raise ValueError('Choose one completed independent adaptation arm')
-    if arm == 'soft_targets':
+    if arm in ('soft_targets', 'multi_windows') or 'window_schedule_by_arm' in summary:
         verify_arm_provenance(summary, arm)
     package = Path(__file__).parent
     for name in SOURCES:
@@ -273,14 +307,18 @@ result = run_inference(roots[0], checkpoints[0], training_dirs[0], EXPECTED, wor
 (working / 'inference_manifest.json').write_text(json.dumps(result, indent=2) + '\\n')
 print(json.dumps(result, indent=2))
 '''
-    title = ('RSNA Knee Soft Target Image' if arm == 'soft_targets' else
+    title = ('RSNA Knee Multi Window Image' if arm == 'multi_windows' else
+             'RSNA Knee Soft Target Image' if arm == 'soft_targets' else
              'RSNA Knee Deep Image' if arm == 'deep_blocks' else 'RSNA Knee Adapted Image')
     _write_notebook(output, kernel_id, title, 'adapted-image.ipynb', [
         ('markdown', '# Independent adapted image model\n\nOur own audited generic-initialized weights. '
-         'Dynamic test images, identical quantized preprocessing, all thirty windows; no training inputs read.\n', 'description'),
+         'Dynamic test images, identical quantized preprocessing, all thirty windows; '
+         'no training images, reports or labels read.\n', 'description'),
         ('code', bootstrap, 'bootstrap'), ('code', runtime, 'runtime')],
         {'source_sha256': summary['source_sha256'], 'training_summary_sha256': sha256(summary_path),
          'training_kernel_id': training_kernel_id, 'target_mode': TARGET_MODES[arm],
+         'train_windows_per_plane': TRAIN_WINDOWS_PER_PLANE[arm],
+         'window_schedule_sha256': summary['arms'][arm]['final_fit'].get('window_schedule_sha256'),
          'training_code_provenance': summary.get('code_provenance'),
          'arm': arm, 'model_sha256': summary['arms'][arm]['final_fit']['checkpoint_sha256']})
     metadata_path = output / 'kernel-metadata.json'

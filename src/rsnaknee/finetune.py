@@ -26,9 +26,10 @@ from rsnaknee.window_model import (AttentionHead, BATCH_SIZE, EPOCHS, GENERIC_WE
                                   SEED, build_supervision, masked_bce)
 
 ARMS = ('frozen', 'late_blocks')
-TRAINABLE_BLOCKS = {'frozen': 0, 'late_blocks': 2, 'deep_blocks': 6, 'soft_targets': 2}
+TRAINABLE_BLOCKS = {'frozen': 0, 'late_blocks': 2, 'deep_blocks': 6, 'soft_targets': 2, 'multi_windows': 2}
 TARGET_MODES = {'frozen': 'binary', 'late_blocks': 'binary', 'deep_blocks': 'binary',
-                'soft_targets': 'public_scores'}
+                'soft_targets': 'public_scores', 'multi_windows': 'binary'}
+TRAIN_WINDOWS_PER_PLANE = {arm: 3 if arm == 'multi_windows' else 1 for arm in TRAINABLE_BLOCKS}
 BUDGET_SECONDS = 7.5 * 3600
 PROBE_STEPS = 64
 
@@ -52,6 +53,38 @@ def window_indices(study_ids) -> np.ndarray:
                 digest = hashlib.sha256(f'{SEED}:{epoch}:{study}:{plane}'.encode()).digest()
                 table[epoch, row, plane] = int.from_bytes(digest[:8], 'little') % 10
     return table
+
+
+def multi_window_indices(study_ids) -> np.ndarray:
+    """Keep the old anchor and add two distinct, independently hashed windows."""
+    ids = list(study_ids)
+    anchors = window_indices(ids)
+    table = np.empty((*anchors.shape, 3), dtype=np.uint8)
+    for epoch in range(EPOCHS):
+        for row, study in enumerate(ids):
+            for plane in range(3):
+                anchor = int(anchors[epoch, row, plane])
+                remaining = [window for window in range(10) if window != anchor]
+                ranked = sorted(remaining, key=lambda window: hashlib.sha256(
+                    f'multi-window-v1:{SEED}:{epoch}:{study}:{plane}:{window}'.encode()).digest())
+                table[epoch, row, plane] = sorted([anchor, *ranked[:2]])
+    return table
+
+
+def arm_window_schedule(tables, arm, study_count):
+    table = tables[arm] if isinstance(tables, dict) else tables
+    shape = (EPOCHS, study_count, 3) + ((3,) if TRAIN_WINDOWS_PER_PLANE[arm] == 3 else ())
+    if (not isinstance(table, np.ndarray) or table.shape != shape or table.dtype != np.uint8
+            or not np.isin(table, range(10)).all()
+            or (table.ndim == 4 and np.any(np.diff(np.sort(table.astype(int), axis=-1), axis=-1) == 0))):
+        raise ValueError('Invalid window schedule for arm: ' + arm)
+    return table
+
+
+def window_schedule_provenance(table, arm):
+    return {'train_windows_per_plane': TRAIN_WINDOWS_PER_PLANE[arm],
+            'window_schedule_sha256': hashlib.sha256(table.tobytes(order='C')).hexdigest(),
+            'artifact': 'multi_window_indices.npy' if arm == 'multi_windows' else 'window_indices.npy'}
 
 
 def slot_logits(head: AttentionHead, features: torch.Tensor, mask: torch.Tensor) -> torch.Tensor:
@@ -103,12 +136,15 @@ class MRIModel(nn.Module):
                 or presence.shape != pixels.shape[:2] or not np.isin(presence, [0, 1]).all()
                 or not np.all(presence.sum(1) > 0)):
             raise ValueError('Require uint8 twelve-slice pixels and usable binary presence')
-        if windows is not None and (windows.shape != presence.shape
-                                   or not np.isin(windows, range(10)).all()):
-            raise ValueError('Require one valid neighboring window per plane')
+        if windows is not None:
+            if (not isinstance(windows, np.ndarray) or windows.shape not in (presence.shape, (*presence.shape, 3))
+                    or not np.issubdtype(windows.dtype, np.integer) or not np.isin(windows, range(10)).all()
+                    or (windows.ndim == 3 and np.any(np.diff(np.sort(windows.astype(int), axis=-1), axis=-1) == 0))):
+                raise ValueError('Require one or three distinct valid integer windows per plane')
         locations = [(row, plane, window) for row in range(len(pixels)) for plane in range(3)
                      if presence[row, plane] for window in
-                     (range(10) if windows is None else [int(windows[row, plane])])]
+                     (range(10) if windows is None else
+                      [int(windows[row, plane])] if windows.ndim == 2 else windows[row, plane].tolist())]
         device = next(self.parameters()).device
         vectors, slots = [], []
         # Only selected windows go to the GPU; frozen early layers retain no tape.
@@ -193,6 +229,7 @@ def training_step(model, optimizer, scaler, pixels, presence, targets, weights, 
 
 def train_fold(factory, arm, pixels, presence, labels, cache_rows, table, heldout_fold):
     started = time.perf_counter()
+    table = arm_window_schedule(table, arm, len(labels))
     mode = TARGET_MODES[arm]
     rows, targets, weights, excluded = training_partition(labels, heldout_fold, target_mode=mode)
     torch.manual_seed(SEED)
@@ -214,6 +251,7 @@ def train_fold(factory, arm, pixels, presence, labels, cache_rows, table, heldou
         print(f'{arm} fold={heldout_fold} epoch={epoch + 1}/{EPOCHS} loss={history[-1]:.6f}', flush=True)
     return model.eval(), {'heldout_fold': heldout_fold, 'training_ids': labels.index[rows].tolist(),
                          'encoder_adaptation': model.training_provenance(),
+                         **window_schedule_provenance(table, arm),
                          **supervision_provenance(mode, targets, weights),
                          'excluded_fold_studies': excluded, 'epoch_training_loss': history,
                          'runtime_seconds': time.perf_counter() - started,
@@ -252,13 +290,23 @@ def throughput_probe(factory, pixels, presence, labels, cache_rows, table, elaps
     arms = selected_arms(arms)
     device = 'cuda' if torch.cuda.is_available() else 'cpu'
     seconds, inference, adaptation, supervision = {}, [], {}, {}
+    schedules, memory, sampled_ids = {}, {}, {}
     start_probe = time.perf_counter()
     # Disposable models and forked RNG ensure the probe cannot seed actual fits.
     with torch.random.fork_rng(devices=list(range(torch.cuda.device_count()))):
         for arm in arms:
+            arm_table = arm_window_schedule(table, arm, len(labels))
+            schedules[arm] = window_schedule_provenance(arm_table, arm)
             mode = TARGET_MODES[arm]
             rows, targets, weights, _ = training_partition(labels, 0, target_mode=mode)
             supervision[arm] = supervision_provenance(mode, targets, weights)
+            probe_rows = np.arange(len(rows))
+            if arm == 'multi_windows':
+                probe_rows = np.flatnonzero(np.asarray(presence[cache_rows[rows]]).all(1))
+                if len(probe_rows) < BATCH_SIZE:
+                    raise ValueError('Multi-window probe requires eight distinct full-plane training studies')
+            sampled = []
+            full_plane_batch_size = BATCH_SIZE
             torch.manual_seed(SEED)
             model = factory(arm).train()
             adaptation[arm] = model.training_provenance()
@@ -266,12 +314,15 @@ def throughput_probe(factory, pixels, presence, labels, cache_rows, table, elaps
             scaler = torch.amp.GradScaler('cuda', enabled=next(model.parameters()).is_cuda)
             if device == 'cuda':
                 torch.cuda.synchronize()
+                torch.cuda.reset_peak_memory_stats()
             started = time.perf_counter()
             for step in range(PROBE_STEPS):
-                batch = (np.arange(BATCH_SIZE) + step * BATCH_SIZE) % len(rows)
+                batch = probe_rows[(np.arange(BATCH_SIZE) + step * BATCH_SIZE) % len(probe_rows)]
                 selected = cache_rows[rows[batch]]
+                sampled.extend(labels.index[rows[batch]].tolist())
+                full_plane_batch_size = min(full_plane_batch_size, int(np.asarray(presence[selected]).all(1).sum()))
                 training_step(model, optimizer, scaler, np.asarray(pixels[selected]), np.asarray(presence[selected]),
-                              targets[batch], weights[batch], table[step % EPOCHS, rows[batch]])
+                              targets[batch], weights[batch], arm_table[step % EPOCHS, rows[batch]])
             if device == 'cuda':
                 torch.cuda.synchronize()
             seconds[arm] = (time.perf_counter() - started) / PROBE_STEPS
@@ -281,6 +332,11 @@ def throughput_probe(factory, pixels, presence, labels, cache_rows, table, elaps
             if device == 'cuda':
                 torch.cuda.synchronize()
             inference.append((time.perf_counter() - started) / len(selected))
+            sampled_ids[arm] = list(dict.fromkeys(sampled))
+            memory[arm] = {'peak_allocated_bytes': torch.cuda.max_memory_allocated() if device == 'cuda' else None,
+                           'peak_reserved_bytes': torch.cuda.max_memory_reserved() if device == 'cuda' else None,
+                           'total_device_bytes': torch.cuda.get_device_properties(0).total_memory if device == 'cuda' else None,
+                           'full_plane_batch_size': full_plane_batch_size}
             del model, optimizer, scaler
             if device == 'cuda':
                 torch.cuda.empty_cache()
@@ -292,6 +348,8 @@ def throughput_probe(factory, pixels, presence, labels, cache_rows, table, elaps
                                 elapsed + time.perf_counter() - start_probe)
     return {'selected_arms': list(arms), 'encoder_adaptation': adaptation,
             'supervision_by_arm': supervision,
+            'window_schedule_by_arm': schedules, 'memory_by_arm': memory,
+            'probe_sampled_ids_by_arm': sampled_ids,
             'steps_per_arm': PROBE_STEPS, 'training_fold_excluded': 0,
             'seconds_per_step': seconds, 'total_training_steps_per_arm': steps,
             'inference_seconds_per_study': max(inference), 'projected_total_seconds': projected,
@@ -374,6 +432,7 @@ def run_comparison(cache_dir: Path, checkpoint_dir: Path, labels_path: Path, out
     if observed.sum() != 58 or gold.loc[observed].isna().any().any():
         raise ValueError('Expected exactly 58 complete gold validation studies')
     table = window_indices(labels.index)
+    tables = {arm: multi_window_indices(labels.index) if arm == 'multi_windows' else table for arm in arms}
     torch.set_num_threads(1)
     torch.use_deterministic_algorithms(True)
     def factory(arm):
@@ -384,6 +443,8 @@ def run_comparison(cache_dir: Path, checkpoint_dir: Path, labels_path: Path, out
         return MRIModel(encoder, arm).to(device)
     output.mkdir(parents=True)
     np.save(output / 'window_indices.npy', table)
+    if 'multi_windows' in arms:
+        np.save(output / 'multi_window_indices.npy', tables['multi_windows'])
     pd.DataFrame({ID_COLUMN: labels.index}).to_csv(output / 'window_study_ids.csv', index=False)
     for source in (labels_path, labels_path.with_name('folds.csv'), audit_path, cache_dir / 'manifest.json'):
         shutil.copy2(source, output / ('feature_manifest.json' if source.name == 'manifest.json' else source.name))
@@ -398,12 +459,14 @@ def run_comparison(cache_dir: Path, checkpoint_dir: Path, labels_path: Path, out
                           'target_mode_by_arm': {arm: TARGET_MODES[arm] for arm in arms},
                           'head_learning_rate': .001, 'backbone_learning_rate': .000008, 'weight_decay': .02,
                           'hidden': 128, 'dropout': .2, 'silver_weight': .25, 'loss': 'BCE mean over batch x 12',
-                          'train_windows_per_plane': 1, 'inference_windows_per_plane': 10,
+                          'train_windows_per_plane': {arm: TRAIN_WINDOWS_PER_PLANE[arm] for arm in arms},
+                          'inference_windows_per_plane': 10,
                           'encoder_mode': 'eval', 'selection': 'fixed final epoch only', 'amp': device == 'cuda'},
                'input_sha256': manifest['input_sha256'], 'pixel_cache_sha256': manifest['artifact_sha256']['pixels_uint8.npy'],
                'labels_sha256': sha256(labels_path), 'split_sha256': sha256(labels_path.with_name('folds.csv')),
                'label_audit_sha256': sha256(audit_path), 'feature_manifest_sha256': sha256(cache_dir / 'manifest.json'),
                'window_indices_sha256': sha256(output / 'window_indices.npy'),
+               'window_schedule_by_arm': {arm: window_schedule_provenance(tables[arm], arm) for arm in arms},
                'window_study_ids_sha256': sha256(output / 'window_study_ids.csv'),
                'source_sha256': {p.name: sha256(p) for p in source_dir.glob('*.py')},
                'versions': {'torch': torch.__version__, 'numpy': np.__version__, 'pandas': pd.__version__,
@@ -411,9 +474,17 @@ def run_comparison(cache_dir: Path, checkpoint_dir: Path, labels_path: Path, out
                'device': device, 'deterministic_algorithms': True,
                'limitations': ['58 repeatedly used gold studies', 'Patient independence unresolved']}
     summary_path = output / 'summary.json'
+    if 'multi_windows' in arms:
+        summary['multi_window_indices_sha256'] = sha256(output / 'multi_window_indices.npy')
     summary_path.write_text(json.dumps(summary, indent=2) + '\n')
-    probe = throughput_probe(factory, pixels, presence, labels, cache_rows, table, time.perf_counter() - started,
-                             arms=arms)
+    try:
+        probe = throughput_probe(factory, pixels, presence, labels, cache_rows, tables, time.perf_counter() - started,
+                                 arms=arms)
+    except torch.cuda.OutOfMemoryError as error:
+        summary.update(status='deferred_memory', runtime_seconds=time.perf_counter() - started,
+                       probe={'error': str(error), 'batch_size': BATCH_SIZE, 'no_recipe_fallback': True})
+        summary_path.write_text(json.dumps(summary, indent=2) + '\n')
+        return summary
     probe_ids = output / 'probe_training_ids.csv'
     pd.DataFrame({ID_COLUMN: probe.pop('probe_training_ids')}).to_csv(probe_ids, index=False)
     probe['training_ids_sha256'] = sha256(probe_ids)
@@ -431,7 +502,7 @@ def run_comparison(cache_dir: Path, checkpoint_dir: Path, labels_path: Path, out
         oof = pd.DataFrame(np.nan, index=labels.index[observed], columns=TARGET_COLUMNS)
         records = []
         for fold in (0, 1, 2, None):
-            model, record = train_fold(factory, arm, pixels, presence, labels, cache_rows, table, fold)
+            model, record = train_fold(factory, arm, pixels, presence, labels, cache_rows, tables, fold)
             stem = 'final' if fold is None else f'fold_{fold}'
             path = directory / ('model.pt' if fold is None else f'{stem}.pt')
             torch.save({name: value.detach().cpu() for name, value in model.state_dict().items()}, path)
