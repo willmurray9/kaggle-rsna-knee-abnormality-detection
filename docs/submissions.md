@@ -180,5 +180,8 @@ parity, request and scoring records live under
 only the visible three rows, not the inaccessible hidden-test predictions.
 
 Kaggle accepted submission **56341808** at **22:04:43 UTC** on September 18.
-Hidden-test scoring is pending. The completed independent public best remains
-**0.780** until a new result is confirmed.
+The authenticated API confirmed **COMPLETE**, public AUC **0.801**, with no error
+description, at **22:39:52 UTC**. `scoring_result.json` preserves the response.
+This is our new independent best, **+0.021** over 0.780. The approximately
+35-minute interval includes queueing and does not measure hidden inference
+alone. No model or selection change followed the leaderboard result.

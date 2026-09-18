@@ -50,6 +50,6 @@ for fold/target results, source and verification evidence.
 
 The local selection was frozen before leaderboard feedback. Private offline
 inference version 1 passed with exact prediction parity; Kaggle accepted
-submission **56341808**. Hidden-test scoring remains pending. The completed
-independent public best is still **0.780**; subsequent scoring evidence belongs
-in [submissions](submissions.md).
+submission **56341808**. Hidden-test scoring completed with public AUC **0.801**,
+our new independent best, **+0.021** over 0.780. The model and selection remained
+unchanged after scoring; see [submission evidence](submissions.md).

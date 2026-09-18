@@ -42,7 +42,8 @@ three folds improved, passing the fixed promotion rule, although the paired
 bootstrap interval includes zero. The model keeps three slices and 768 features
 per window, the same architecture and binary labels, and all ten windows per
 plane at inference. Offline predictions matched exactly and submission
-**56341808** is awaiting hidden-test scoring. See [the plan and outcome](multi-window-plan.md).
+**56341808** completed with public AUC **0.801**, improving our independent best
+by **0.021**. See [the plan and outcome](multi-window-plan.md).
 
 ## 1. Working foundation — complete
 

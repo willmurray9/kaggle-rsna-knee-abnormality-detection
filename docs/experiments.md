@@ -531,7 +531,7 @@ binary labels, saved folds, generic initialization, optimizer settings and
 trainable parameter counts for each corresponding fit. Each final fit uses
 4,354 studies with 696 official and 37,920 derived target cells; unknown labels
 remain masked. No new labels were generated. The candidate's three windows
-expose a mean **7.335 distinct cached slices per plane per training draw**, versus
+cover a mean **7.335 distinct cached slice positions per scheduled plane**, versus
 three for the control, while retaining 768-dimensional window vectors and the
 same attention head. Broader image exposure and joint attention context change
 together, so this experiment cannot attribute the improvement to either alone.
@@ -549,8 +549,9 @@ pixel-cache and checkpoint bytes remain on Kaggle.
 The local decision was frozen at 22:01:30 UTC before leaderboard feedback.
 Private offline inference version 1 passed its provenance and submission checks
 in 13.75 seconds and reproduced all visible-example probabilities exactly.
-Kaggle accepted submission **56341808** at 22:04:43 UTC. Hidden-test scoring is
-pending; the completed independent public best remains **0.780**. Subsequent
-scoring evidence belongs in [submissions](submissions.md).
+Kaggle accepted submission **56341808** at 22:04:43 UTC. At 22:39:52 UTC, the
+authenticated API confirmed **COMPLETE**, public AUC **0.801**, with no error.
+This improves our independent public best by **0.021** over 0.780. No model or
+selection change followed the leaderboard result. See [submission evidence](submissions.md).
 Local evidence is under `artifacts/reports/multi-window-v1/`; training outputs
 are in `artifacts/kaggle/multi-window-training/versions/v1/output/adaptation/`.
