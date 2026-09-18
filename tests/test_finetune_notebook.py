@@ -40,14 +40,17 @@ def synthetic_training_repo(tmp_path, monkeypatch):
     return root
 
 
-@pytest.mark.parametrize('arms', [None, ('late_blocks', 'deep_blocks'), ('late_blocks', 'soft_targets')])
+@pytest.mark.parametrize('arms', [None, ('late_blocks', 'deep_blocks'), ('late_blocks', 'soft_targets'),
+                                 ('late_blocks', 'multi_windows')])
 def test_private_offline_notebook_restores_exact_audited_inputs_and_sources(tmp_path, arms, synthetic_training_repo):
     output = tmp_path / 'build'
     options = {} if arms is None else {'arms': arms}
     expected_arms = ('frozen', 'late_blocks') if arms is None else arms
     build_finetune_notebook(output, **options)
     metadata = json.loads((output / 'kernel-metadata.json').read_text())
-    assert metadata['title'] == ('RSNA Knee Soft Target Training' if arms and 'soft_targets' in arms else 'RSNA Knee Depth Training' if arms else 'RSNA Knee Adaptation Training')
+    assert metadata['title'] == ('RSNA Knee Multi Window Training' if arms and 'multi_windows' in arms else
+                                 'RSNA Knee Soft Target Training' if arms and 'soft_targets' in arms else
+                                 'RSNA Knee Depth Training' if arms else 'RSNA Knee Adaptation Training')
     assert metadata['is_private'] is True and metadata['enable_internet'] is False
     assert metadata['enable_gpu'] is True and metadata['machine_shape'] == 'NvidiaTeslaT4'
     assert metadata['kernel_sources'] == ['willmurray99/rsna-knee-coverage-features']
@@ -76,8 +79,9 @@ def test_private_offline_notebook_restores_exact_audited_inputs_and_sources(tmp_
     assert manifest['selected_arms'] == list(expected_arms)
     assert manifest['code_provenance'] == namespace['CODE_PROVENANCE']
     assert manifest['target_mode_by_arm'] == {arm: 'public_scores' if arm == 'soft_targets' else 'binary' for arm in expected_arms}
+    assert manifest['train_windows_per_plane'] == {arm: 3 if arm == 'multi_windows' else 1 for arm in expected_arms}
     assert 'code_provenance=CODE_PROVENANCE' in code['runtime']
-    assert manifest['trainable_blocks_by_arm'] == {arm: {'frozen': 0, 'late_blocks': 2, 'deep_blocks': 6, 'soft_targets': 2}[arm]
+    assert manifest['trainable_blocks_by_arm'] == {arm: {'frozen': 0, 'late_blocks': 2, 'deep_blocks': 6, 'soft_targets': 2, 'multi_windows': 2}[arm]
                                                  for arm in expected_arms}
     assert manifest['kernel_metadata_sha256'] == sha256(output / 'kernel-metadata.json')
     assert manifest['notebook_sha256'] == sha256(output / metadata['code_file'])
@@ -111,7 +115,7 @@ def test_dynamic_test_only_quantization_and_1300_study_ids(tmp_path):
         predict_test_images(test.iloc[:2], series, tmp_path, predict, prepare=prepare)
 
 
-@pytest.mark.parametrize('arm', ['late_blocks', 'deep_blocks'])
+@pytest.mark.parametrize('arm', ['late_blocks', 'deep_blocks', 'multi_windows'])
 def test_prepared_image_and_cached_uint8_model_predictions_match(arm):
     import numpy as np
     import torch
@@ -161,7 +165,7 @@ def test_inference_builder_attaches_own_weights_and_rejects_unbound_sources(tmp_
         build_inference_notebook(path, arm, tmp_path / 'bad', **options)
 
 
-@pytest.mark.parametrize('arm', ['late_blocks', 'deep_blocks', 'soft_targets'])
+@pytest.mark.parametrize('arm', ['late_blocks', 'deep_blocks', 'soft_targets', 'multi_windows'])
 def test_inference_verifies_attached_model_sources_and_generic_config(tmp_path, arm):
     from rsnaknee.finetune_notebook import SOURCES, verify_inference_inputs
     root = Path(__file__).resolve().parents[1]
@@ -190,10 +194,37 @@ def test_inference_verifies_attached_model_sources_and_generic_config(tmp_path, 
     if arm == 'soft_targets':
         summary['recipe'] = {'target_mode_by_arm': {arm: 'public_scores'}}
         summary['arms'][arm]['final_fit'].update(target_mode='public_scores', targets_sha256='a' * 64, weights_sha256='b' * 64)
+    if arm == 'multi_windows':
+        import hashlib
+        import numpy as np
+        candidate = multi_window_summary()
+        candidate['arms'][arm]['final_fit']['checkpoint_sha256'] = sha256(model_path)
+        summary.update({key: value for key, value in candidate.items() if key != 'source_sha256'})
+        table = np.tile(np.array([0, 3, 6], dtype=np.uint8), (6, 9, 3, 1))
+        np.save(training / 'multi_window_indices.npy', table)
+        digest = hashlib.sha256(table.tobytes()).hexdigest()
+        summary['arms'][arm]['final_fit']['window_schedule_sha256'] = digest
+        summary['window_schedule_by_arm'][arm]['window_schedule_sha256'] = digest
+        summary['multi_window_indices_sha256'] = sha256(training / 'multi_window_indices.npy')
     (training / 'summary.json').write_text(json.dumps(summary))
     expected = {'summary_sha256': sha256(training / 'summary.json'), 'arm': arm}
     actual, _ = verify_inference_inputs(training, tmp_path, expected)
     assert actual == model_path
+    if arm == 'multi_windows':
+        table[0, 0, 0, 0] = 1
+        np.save(training / 'multi_window_indices.npy', table)
+        with pytest.raises(ValueError, match='Window schedule provenance file hash'):
+            verify_inference_inputs(training, tmp_path, expected)
+        summary['multi_window_indices_sha256'] = sha256(training / 'multi_window_indices.npy')
+        (training / 'summary.json').write_text(json.dumps(summary))
+        expected['summary_sha256'] = sha256(training / 'summary.json')
+        with pytest.raises(ValueError, match='Window schedule provenance table hash'):
+            verify_inference_inputs(training, tmp_path, expected)
+        table[0, 0, 0, 0] = 0
+        np.save(training / 'multi_window_indices.npy', table)
+        summary['multi_window_indices_sha256'] = sha256(training / 'multi_window_indices.npy')
+        (training / 'summary.json').write_text(json.dumps(summary))
+        expected['summary_sha256'] = sha256(training / 'summary.json')
     model_path.write_bytes(b'corrupt')
     with pytest.raises(ValueError, match='model hash'):
         verify_inference_inputs(training, tmp_path, expected)
@@ -202,7 +233,7 @@ def test_inference_verifies_attached_model_sources_and_generic_config(tmp_path, 
     with pytest.raises(ValueError, match='architecture hash'):
         verify_inference_inputs(training, tmp_path, expected)
     config.write_text('{"model_type":"dinov2","hidden_size":384}')
-    if arm in ('deep_blocks', 'soft_targets'):
+    if arm in ('deep_blocks', 'soft_targets', 'multi_windows'):
         summary['arms'][arm]['final_fit']['encoder_adaptation']['trainable_blocks'] = 99
         (training / 'summary.json').write_text(json.dumps(summary))
         expected['summary_sha256'] = sha256(training / 'summary.json')
@@ -215,7 +246,7 @@ def test_inference_verifies_attached_model_sources_and_generic_config(tmp_path, 
             verify_inference_inputs(training, tmp_path, expected)
 
 
-@pytest.mark.parametrize('arm,blocks', [('late_blocks', 3), ('deep_blocks', 7), ('soft_targets', 3)])
+@pytest.mark.parametrize('arm,blocks', [('late_blocks', 3), ('deep_blocks', 7), ('soft_targets', 3), ('multi_windows', 3)])
 def test_generated_isolated_package_runs_real_dinov2_training_and_inference(tmp_path, arm, blocks, synthetic_training_repo):
     import os
     import subprocess
@@ -247,8 +278,9 @@ _, targets, weights, _ = implementation.training_partition(labels, 0, target_mod
 assert implementation.TARGET_MODES[model.arm] == ('public_scores' if model.arm == 'soft_targets' else 'binary')
 if model.arm == 'soft_targets':
     assert targets[2, 0] == np.float32(.82) and weights[2, 0] == .25
-loss = training_step(model, optimizer, scaler, pixels, flags, targets[1:3],
-                     weights[1:3], np.array([[0, 1, 2], [7, 8, 9]]))
+windows = (np.array([[[0, 3, 6], [1, 4, 7], [2, 5, 8]], [[1, 4, 7], [2, 5, 8], [3, 6, 9]]])
+           if model.arm == 'multi_windows' else np.array([[0, 1, 2], [7, 8, 9]]))
+loss = training_step(model, optimizer, scaler, pixels, flags, targets[1:3], weights[1:3], windows)
 assert np.isfinite(loss)
 assert encoder.encoder.layer[0].attention.attention.query.weight.grad is None
 assert encoder.encoder.layer[-1].attention.attention.query.weight.grad is not None
@@ -330,3 +362,80 @@ def test_new_binary_run_cannot_drop_target_provenance():
                'arms': {'late_blocks': {'final_fit': {}}}}
     with pytest.raises(ValueError, match='Target mode provenance'):
         verify_arm_provenance(summary, 'late_blocks')
+
+
+def multi_window_summary():
+    from rsnaknee.finetune_notebook import SOURCES
+    package = Path(__file__).resolve().parents[1] / 'src/rsnaknee'
+    arm = 'multi_windows'
+    fit = {'checkpoint_sha256': 'c' * 64, 'target_mode': 'binary',
+           'targets_sha256': 'a' * 64, 'weights_sha256': 'b' * 64,
+           'train_windows_per_plane': 3, 'window_schedule_sha256': 'd' * 64,
+           'encoder_adaptation': {'arm': arm, 'encoder_blocks': 12, 'trainable_blocks': 2,
+                                  'trainable_block_indices': [10, 11], 'final_layernorm_trainable': True}}
+    return {'status': 'complete', 'arms': {arm: {'final_fit': fit}},
+            'recipe': {'target_mode_by_arm': {arm: 'binary'}, 'train_windows_per_plane': {arm: 3}},
+            'window_schedule_by_arm': {arm: {'train_windows_per_plane': 3,
+                                            'window_schedule_sha256': 'd' * 64,
+                                            'artifact': 'multi_window_indices.npy'}},
+            'multi_window_indices_sha256': 'e' * 64,
+            'code_provenance': {'git_revision': 'f' * 40, 'git_dirty': False},
+            'source_sha256': {name: sha256(package / name) for name in SOURCES}}
+
+
+def test_multi_window_inference_requires_provenance_even_if_all_fields_are_removed():
+    from rsnaknee.finetune_notebook import verify_arm_provenance
+    summary = {'arms': {'multi_windows': {'final_fit': {}}}}
+    with pytest.raises(ValueError, match='provenance'):
+        verify_arm_provenance(summary, 'multi_windows')
+
+
+@pytest.mark.parametrize('location,key,value', [
+    ('fit', 'target_mode', 'public_scores'), ('fit', 'encoder_adaptation', None),
+    ('fit', 'targets_sha256', None), ('fit', 'weights_sha256', 'bad'),
+    ('fit', 'train_windows_per_plane', 1), ('fit', 'window_schedule_sha256', '9' * 64),
+    ('recipe', 'train_windows_per_plane', {'multi_windows': 1}),
+    ('recipe', 'train_windows_per_plane', 3),
+    ('recipe', 'target_mode_by_arm', {'multi_windows': 'public_scores'}),
+    ('schedule', 'train_windows_per_plane', 1), ('schedule', 'window_schedule_sha256', 'bad'),
+    ('schedule', 'artifact', 'window_indices.npy'),
+    ('summary', 'window_schedule_by_arm', {'multi_windows': None}),
+    ('summary', 'window_schedule_by_arm', {}), ('summary', 'multi_window_indices_sha256', None),
+])
+def test_multi_window_inference_rejects_mismatched_recipe_and_schedule(tmp_path, location, key, value):
+    from rsnaknee.finetune_notebook import build_inference_notebook, verify_arm_provenance
+    summary = multi_window_summary()
+    verify_arm_provenance(summary, 'multi_windows')
+    container = {'fit': summary['arms']['multi_windows']['final_fit'], 'recipe': summary['recipe'],
+                 'schedule': summary['window_schedule_by_arm']['multi_windows'], 'summary': summary}[location]
+    container[key] = value
+    with pytest.raises(ValueError, match='provenance'):
+        verify_arm_provenance(summary, 'multi_windows')
+    path = tmp_path / 'summary.json'
+    path.write_text(json.dumps(summary))
+    with pytest.raises(ValueError, match='provenance'):
+        build_inference_notebook(path, 'multi_windows', tmp_path / 'invalid')
+
+
+def test_multi_window_inference_build_binds_selected_schedule_and_arm(tmp_path):
+    from rsnaknee.finetune_notebook import build_inference_notebook
+    summary = multi_window_summary()
+    path = tmp_path / 'summary.json'
+    path.write_text(json.dumps(summary))
+    output = tmp_path / 'inference'
+    build_inference_notebook(path, 'multi_windows', output,
+                             training_kernel_id='willmurray99/rsna-knee-multi-window-training')
+    metadata = json.loads((output / 'kernel-metadata.json').read_text())
+    manifest = json.loads((output / 'build_manifest.json').read_text())
+    assert metadata['title'] == 'RSNA Knee Multi Window Image'
+    assert metadata['kernel_sources'] == ['willmurray99/rsna-knee-multi-window-training']
+    assert metadata['is_private'] and not metadata['enable_internet']
+    assert manifest['arm'] == 'multi_windows' and manifest['target_mode'] == 'binary'
+    assert manifest['train_windows_per_plane'] == 3
+    assert manifest['window_schedule_sha256'] == 'd' * 64
+    assert manifest['model_sha256'] == 'c' * 64
+    assert manifest['training_code_provenance'] == summary['code_provenance']
+    notebook = json.loads((output / metadata['code_file']).read_text())
+    for cell in notebook['cells']:
+        if cell['cell_type'] == 'code':
+            compile(''.join(cell['source']), 'inference', 'exec')
