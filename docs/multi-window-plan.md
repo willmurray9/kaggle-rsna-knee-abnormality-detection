@@ -29,3 +29,27 @@ Freeze the decision before leaderboard feedback. A promoted candidate must pass 
 - Commit the plan, implementation and outcome in logical steps; merge reviewed work with passing CI.
 
 Evidence: ignored `artifacts/reports/multi-window-v1/`. Use separate versioned training/inference notebook directories so previous runs remain reproducible.
+
+## Local outcome — September 18
+
+Version 1 of the private training notebook completed the comparison in 3,565.07
+seconds. The control exactly reproduced the saved probabilities and fold AUCs.
+Three windows scored **0.774776** mean within-fold macro AUC versus **0.759911**
+for both controls, improving all three folds and passing the registered local
+promotion gate. The independent raw-truth verifier agrees with this decision
+and confirms fold exclusions, unchanged supervision and compact artifact hashes.
+No new labels were generated.
+
+The conditional paired 95% bootstrap interval is **[−0.010256, +0.036274]**, from
+704 valid draws of 1,000; six target means improve and six decline. Reuse of 58
+gold studies, unresolved patient/extractor independence and the combined change
+in image exposure and attention context limit the conclusion. The candidate
+passed the memory/runtime probe without recipe changes. See the
+[complete local outcome](experiments.md#three-window-local-outcome-promotion-gate-passed)
+for fold/target results, source and verification evidence.
+
+The local selection was frozen before leaderboard feedback. Private offline
+inference version 1 passed with exact prediction parity; Kaggle accepted
+submission **56341808**. Hidden-test scoring remains pending. The completed
+independent public best is still **0.780**; subsequent scoring evidence belongs
+in [submissions](submissions.md).

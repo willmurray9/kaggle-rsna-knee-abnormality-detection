@@ -136,3 +136,49 @@ description, at **01:22:05 UTC**. `scoring_result.json` preserves that response.
 This is our new independent best, **+0.062** over 0.718. The interval from
 submission to observed completion includes queueing and does not measure hidden
 inference alone. No model or selection change followed the leaderboard result.
+
+## Independent three-window model — version 1
+
+The September 18 comparison changes training from one to three distinct windows
+per MRI plane. Each window still contains three sampled slices and yields 768
+encoder features. The same final two DINOv2 blocks and attention head learn
+jointly from all selected windows; inference still uses all ten windows per
+present plane. Binary supervision, weights and saved folds are unchanged; no new
+labels were generated.
+
+Local mean within-fold AUC increased from **0.759911 to 0.774776**, with gains in
+all three folds. The rerun control exactly reproduced the saved predictions,
+epoch losses and checkpoint hashes. Independent verification agreed with the
+preregistered promotion decision, frozen at **22:01:30 UTC** before submission.
+The conditional bootstrap interval includes zero; see [experiment outcomes](experiments.md)
+for target tradeoffs and the limits of 58 reused gold studies.
+
+Private offline notebook `willmurray99/rsna-knee-multi-window-image`, version 1,
+completed the three visible examples in **13.755 seconds**. All probabilities
+matched the saved training-run predictions exactly (maximum absolute difference
+**0**), passing the fixed absolute/relative 1e-4 tolerances. Selected checkpoint,
+training summary, window schedule, preprocessing, test metadata and all twelve
+packaged source files were verified. Dynamic-ID tests cover 1,300 replacement
+studies. Inference uses test images without reports or labels; these checks and
+example timing do not establish hidden-test completion.
+
+| Artifact | SHA-256 |
+| --- | --- |
+| Selected independent full model | `1abd7c35d59d85d2e08f507c76a8996aca43e2ddd9ea18badf7bf615967b0bd5` |
+| Training summary | `05f01fd06bcc2e17b49d7059d16c70d558b6e47a2e0c77872c92a9d4d483fd45` |
+| Submitted notebook | `51183a5e235a93869c87c5707735023cf066fcfe7acc891c7fcdc33f8b6289d5` |
+| Kaggle example CSV | `38bdb0dd4a938185ebf90cd6de869e645313a1e84797b554871c913201778eaf` |
+| Unchanged image split | `23c611d98c910549c5c143b30de436d4217214aae239f15850cf02db2cd6ba21` |
+
+The producing training source is clean, pushed revision
+`2f4daefd1cc0baddf08807867edbd5dd346df2e5`. Training checkpoints remain in private
+`willmurray99/rsna-knee-multi-window-training`, version 1. Compact training and
+independent verification records live under `artifacts/reports/multi-window-v1/`
+and `artifacts/kaggle/multi-window-training/versions/v1/output/`. Inference,
+parity, request and scoring records live under
+`artifacts/kaggle/multi-window-image/versions/v1/`. The example CSV hash identifies
+only the visible three rows, not the inaccessible hidden-test predictions.
+
+Kaggle accepted submission **56341808** at **22:04:43 UTC** on September 18.
+Hidden-test scoring is pending. The completed independent public best remains
+**0.780** until a new result is confirmed.

@@ -28,6 +28,13 @@ scores scored 0.75995 versus 0.75991, improving only one of three folds. It fail
 the preregistered promotion rule, so no new competition submission was made.
 The selected model still uses binary public targets; no new labels were generated.
 
+The September 18 [three-window comparison](docs/multi-window-plan.md) improved
+local AUC from **0.75991 to 0.77478**, with gains in all three folds. It keeps
+three slices and 768 features per window while training jointly on three windows
+per plane. Labels and model parameter counts are unchanged. Offline inference
+matched the saved predictions exactly; submission **56341808** is awaiting
+hidden-test scoring. The completed independent public best remains **0.780**.
+
 ## Start here
 
 Run from this repository's root:

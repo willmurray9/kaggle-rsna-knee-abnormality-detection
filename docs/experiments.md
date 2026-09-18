@@ -481,3 +481,76 @@ positions. No labels are added. The complete recipe, memory/runtime probe,
 control-reproduction requirement and promotion rule are fixed in
 [the experiment plan](multi-window-plan.md). Commit and push source before launch;
 record the outcome separately, whether successful or rejected.
+
+### Three-window local outcome: promotion gate passed
+
+Private offline notebook `willmurray99/rsna-knee-multi-window-training`, version 1,
+completed on September 18. The comparison took **3,565.07 seconds** from clean,
+pushed source `2f4daefd1cc0baddf08807867edbd5dd346df2e5`. Prelaunch verification
+passed 289 local tests, 288 Linux CI tests with one expected optional-integration
+skip, independent code review and the generated-notebook smoke build. The
+outcome analyzer and independent verifier were frozen before launch.
+
+| Recipe | Fold 0 | Fold 1 | Fold 2 | Mean AUC |
+| --- | ---: | ---: | ---: | ---: |
+| Saved one-window reference | 0.780411 | 0.732049 | 0.767272 | **0.759911** |
+| Rerun one-window control | 0.780411 | 0.732049 | 0.767272 | **0.759911** |
+| Three-window candidate | 0.805081 | 0.740177 | 0.779072 | **0.774776** |
+
+The control reproduces all 696 held-out probabilities exactly (maximum absolute
+difference zero), along with all 24 epoch losses and four checkpoint hashes.
+The candidate improves mean within-fold macro AUC by
+**+0.014866** and improves **all three folds** against both controls, passing the
+preregistered promotion gate. Fold AUC standard deviation is 0.032664 for the
+candidate and 0.025008 for the control. The paired within-fold 95% bootstrap
+interval for the difference is **[−0.010256, +0.036274]**, with 704 valid draws
+from 1,000 attempts at seed 20260916; it includes zero. This descriptive interval
+holds fitted predictions fixed and excludes training, split and selection
+uncertainty. The same 58 gold studies have been reused; patient and public-label
+extractor independence remain unresolved.
+
+Mean within-fold target AUCs show six improvements and six declines:
+
+| Target | One window | Three windows | Difference |
+| --- | ---: | ---: | ---: |
+| ACL | 0.562751 | 0.606508 | +0.043757 |
+| MCL | 0.608252 | 0.689542 | +0.081291 |
+| Medial Meniscus | 0.677315 | 0.673464 | −0.003851 |
+| Lateral Meniscus | 0.791257 | 0.778811 | −0.012447 |
+| Medial OA | 0.897867 | 0.939236 | +0.041369 |
+| Lateral OA | 0.778312 | 0.776353 | −0.001959 |
+| PF OA | 0.814491 | 0.829876 | +0.015385 |
+| Effusion | 0.911640 | 0.883862 | −0.027778 |
+| Synovitis | 0.780825 | 0.755269 | −0.025556 |
+| Baker's | 0.891518 | 0.861161 | −0.030357 |
+| Contusion | 0.673748 | 0.732601 | +0.058852 |
+| Fracture | 0.730952 | 0.770635 | +0.039683 |
+
+Both arms retain identical training-ID sets, target and weight fingerprints,
+binary labels, saved folds, generic initialization, optimizer settings and
+trainable parameter counts for each corresponding fit. Each final fit uses
+4,354 studies with 696 official and 37,920 derived target cells; unknown labels
+remain masked. No new labels were generated. The candidate's three windows
+expose a mean **7.335 distinct cached slices per plane per training draw**, versus
+three for the control, while retaining 768-dimensional window vectors and the
+same attention head. Broader image exposure and joint attention context change
+together, so this experiment cannot attribute the improvement to either alone.
+No per-target blending or further tuning follows the target results.
+
+The 64-step full-batch probe recorded peak reserved GPU memory of **1.491 GB** for
+the candidate and **0.770 GB** for the control on a **15.636 GB** device. Its
+4,956.86-second projection passed the 7.5-hour gate; the inference projection
+excluded DICOM preparation. An independent verifier recomputed AUCs, bootstrap
+and selection from original official truth and checked fold exclusions,
+supervision, source provenance and 61 compact artifact hashes across the new and
+reference runs. Only 47 compact output files (18.73 MB) were downloaded; MRI,
+pixel-cache and checkpoint bytes remain on Kaggle.
+
+The local decision was frozen at 22:01:30 UTC before leaderboard feedback.
+Private offline inference version 1 passed its provenance and submission checks
+in 13.75 seconds and reproduced all visible-example probabilities exactly.
+Kaggle accepted submission **56341808** at 22:04:43 UTC. Hidden-test scoring is
+pending; the completed independent public best remains **0.780**. Subsequent
+scoring evidence belongs in [submissions](submissions.md).
+Local evidence is under `artifacts/reports/multi-window-v1/`; training outputs
+are in `artifacts/kaggle/multi-window-training/versions/v1/output/adaptation/`.
