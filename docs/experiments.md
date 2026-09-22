@@ -694,12 +694,10 @@ added five more rejected cases and an independent ranking oracle that matched
 exactly through 1,300 studies.
 
 Launch evidence was frozen at **19:47:03 UTC** on September 22. Private notebook
-`willmurray99/rsna-knee-reference-blend`, version 1, was pushed once and is running.
-Hosted component parity, independent blend arithmetic and the requested single
-submission are pending; no candidate score or improvement is claimed. Evidence
-is under `artifacts/reports/reference-blend-v1/` and
-`artifacts/kaggle/reference-blend/versions/v1/`. The independent public best
-remains 0.819, and the locally selected three-window baseline remains 0.77478.
+`willmurray99/rsna-knee-reference-blend`, version 1, was pushed once but stalled
+before technical verification and was not submitted. Its evidence is preserved
+under `artifacts/reports/reference-blend-v1/` and
+`artifacts/kaggle/reference-blend/versions/v1/`.
 
 ### Private execution recovery — September 22
 
@@ -717,6 +715,30 @@ notebooks, their weights and preprocessing, rank arithmetic, the 90/10 recipe
 and shared eight-hour deadline are unchanged. All **379 local tests** pass.
 Independent review also verified completion with the parent's output pipes left
 undrained while eight MiB of child output was preserved in regular files.
-Version 2 will repeat the same example-parity and provenance gates before the
-single planned competition submission. This is an execution repair, not another
-model candidate or a change selected from leaderboard feedback.
+The repair is clean, pushed source
+`5a1d9fd77c4d63ab9741c259767db78bdd9cec25`, with passing Linux CI. Version 2
+completed the three visible studies in **95.585 seconds**: **80.493 seconds** for
+the public branch and **14.960 seconds** for the independent branch. All twenty
+public members and both unchanged parent predictions reproduced exactly. The
+independent verifier checked five blend modules, twelve independent modules,
+original notebooks, runner code, checkpoint/metadata evidence and preserved logs;
+the final blend matched both independent arithmetic and the frozen example
+CSV exactly. Successful replay supports the output-capture explanation but does
+not establish the stalled version's platform cause conclusively.
+
+The public API requires a session ID for cancellation but does not provide a
+supported way to resolve it from this notebook. No cancellation was attempted
+with a guessed ID. Version 1 was last observed RUNNING; after the latest version
+advanced, its terminal state remained unresolved. Its eight-hour wrapper timeout
+is unchanged, within the nine-hour competition limit. We do not claim a confirmed
+private-platform termination time. The [API limitation](https://github.com/Kaggle/kaggle-cli/issues/1169)
+and [concurrent-session behavior](https://www.kaggle.com/docs/efficient-gpu-usage)
+are documented separately from the successful version 2 result.
+
+The technical submission decision was frozen at **20:34:27 UTC**; Kaggle accepted
+the single planned submission, **56473633**, using version **2**. Hidden scoring
+is pending. This is the same fixed model candidate after an execution repair;
+no leaderboard feedback changed the recipe. The primary public baseline remains
+0.891, the independent public best 0.819 and the independent local baseline
+0.77478. Version 2 evidence is under `artifacts/reports/reference-blend-v2/` and
+`artifacts/kaggle/reference-blend/versions/v2/`.

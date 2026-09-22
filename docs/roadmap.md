@@ -58,15 +58,17 @@ unchanged; the disagreement warrants stronger validation rather than tuning to
 this leaderboard result. See [the plan and outcome](all-window-plan.md).
 
 **Current submission focus:** use the reproduced public **0.891** ensemble as
-the primary baseline. The next [fixed experiment](reference-blend-plan.md) adds
+the primary baseline. The current [fixed experiment](reference-blend-plan.md) adds
 10% of our independent **0.819** model after ranking both parents per target
 across the complete test set. It keeps all twenty public members and the existing
 independent checkpoint, with no retraining, relabeling or coefficient search.
-Private offline execution is running; component parity and the one permitted
-submission are pending. Only a score strictly above 0.891 becomes a provisional
-new public best. The public checkpoints may have seen our 58 gold studies, so
-this blend has no valid local CV; three-window training remains the independent
-baseline for future controlled training comparisons.
+Private version 2 completed in **95.585 seconds**, reproducing both parents and
+the independently calculated blend exactly. An output-capture repair followed
+the stalled version 1 without changing either model or recipe. Submission
+**56473633** is awaiting hidden scoring. Only a score strictly above 0.891 becomes
+a provisional new public best. The public checkpoints may have seen our 58 gold
+studies, so this blend has no valid local CV; three-window training remains the
+independent baseline for future controlled training comparisons.
 
 ## 1. Working foundation — complete
 
