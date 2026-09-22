@@ -2,7 +2,7 @@
 
 A small, explainable starting point for the [Kaggle competition](https://www.kaggle.com/competitions/rsna-knee-abnormality-detection), using the same basic structure as our soil-grain project.
 
-**Status:** our independently trained model's best public AUC is **0.819** from the [all-ten-window diagnostic](docs/all-window-plan.md), submission **56471807**, up from **0.801** for three-window training, **0.780** for one-window adaptation and **0.718** for the frozen image baseline. Local validation went the other way: **0.76965 versus 0.77478** on the same 58 explicit-label studies, so three-window training remains the locally selected baseline. A separate reproduction of a public competition-trained ensemble scored **0.891**; it has no valid local CV on our folds. See [experiments](docs/experiments.md) and [submission evidence](docs/submissions.md). Final deadline: **October 22, 2026, 23:59 UTC**.
+**Status:** the reproduced public ensemble's **0.891** AUC is now our primary submission baseline. Our best independently trained submission is **0.819** from the [all-ten-window diagnostic](docs/all-window-plan.md), ref **56471807**. Three-window training remains the locally selected independent baseline: **0.77478** local AUC versus **0.76965** for ten windows. A [fixed 90/10 rank blend](docs/reference-blend-plan.md) of the public ensemble and independent ten-window model is in private offline execution; parity and submission score are pending. The public ensemble and blend have no valid local CV on our folds. See [experiments](docs/experiments.md) and [submission evidence](docs/submissions.md). Final deadline: **October 22, 2026, 23:59 UTC**.
 
 The key challenge is supervision: the current training CSV has **4,407 studies**, but only **58 have the 12 condition labels**. All have reports; test studies do not. Missing labels must stay unknown. See [competition details](docs/competition.md) and the [roadmap](docs/roadmap.md).
 
@@ -80,8 +80,9 @@ artifacts/kaggle/       Private notebook builds, run logs and submission evidenc
 `uv.lock` fixes the local dependency versions. Paths in `configs/data.yaml` are relative to the repository root. The imaging extra installs Pillow and pydicom. The training extra installs PyTorch and Transformers for local cached-feature learning and tests; MRI encoding and encoder adaptation run on Kaggle's GPU.
 
 `make test` uses synthetic fixtures and runs without competition data or Kaggle
-credentials. One optional public-reference integration check skips when its
-separately downloaded, audited source notebook and manifest are unavailable.
+credentials. Two optional integration checks cover the public reference and
+saved-notebook blend packaging; they skip when their separately downloaded,
+audited source artifacts are unavailable.
 GitHub Actions runs the same tests on pushes to `main` and pull requests using Python 3.12 and the locked dependencies on a CPU runner.
 
 `make metadata-baseline` compares constant 0.5, training-fold prevalence and regularized logistic regression using series counts on the frozen split. It saves a new timestamped run and refuses to overwrite existing experiments. [EDA](docs/eda.md) explains the split and missing-label handling; [experiments](docs/experiments.md) records the fixed recipe, uncertainty and error review. Validation is study/report-grouped, with unresolved patient overlap. The model uses only the 58 observed-label cases and metadata available at inference.

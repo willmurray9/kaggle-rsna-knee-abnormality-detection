@@ -57,6 +57,17 @@ our new independent public best (**+0.018**). The local selection decision remai
 unchanged; the disagreement warrants stronger validation rather than tuning to
 this leaderboard result. See [the plan and outcome](all-window-plan.md).
 
+**Current submission focus:** use the reproduced public **0.891** ensemble as
+the primary baseline. The next [fixed experiment](reference-blend-plan.md) adds
+10% of our independent **0.819** model after ranking both parents per target
+across the complete test set. It keeps all twenty public members and the existing
+independent checkpoint, with no retraining, relabeling or coefficient search.
+Private offline execution is running; component parity and the one permitted
+submission are pending. Only a score strictly above 0.891 becomes a provisional
+new public best. The public checkpoints may have seen our 58 gold studies, so
+this blend has no valid local CV; three-window training remains the independent
+baseline for future controlled training comparisons.
+
 ## 1. Working foundation — complete
 
 Audit the actual CSVs, preserve missing labels, verify macro AUC and submission format, and produce a constant 0.5 sanity output. AUC 0.5 is expected for constant predictions; it measures neither image understanding nor generalization. The included notebook's hosted execution has now passed.

@@ -673,3 +673,30 @@ prediction parity, independently verify blend arithmetic, then make one technica
 pass-gated submission. A score above 0.891 is a provisional public best; equal or
 lower retains the pure reference. Record the outcome without repeated leaderboard
 tuning. See [the fixed recipe and execution gates](reference-blend-plan.md).
+
+### Fixed blend implementation and launch — outcome pending
+
+Clean, pushed source `167eeefff68db2e003743de60e5f51a3e72e7010` packages the
+two scored inference notebooks in sequential, isolated Python processes. It pins
+both original notebooks, all twenty public checkpoint hashes and ten-window
+counts, and the independent model, training summary and schedule. Test IDs come
+from the current competition mount; ranks span the complete current test set.
+The root candidate CSV is written only after both complete components pass
+provenance and probability checks. Private T4 execution has internet disabled
+and a shared eight-hour deadline; the existing public memory guard remains active.
+
+Prelaunch verification passed **378 local tests**, Linux CI and independent code
+review. Tests include 1,300 replacement IDs, ties, shuffled components, invalid
+outputs, missing members, altered checkpoints/source, branch failures and timeout.
+The independently implemented output verifier was frozen before hosted execution;
+its valid fixture passed and all 25 corrupted fixtures were rejected. Review
+added five more rejected cases and an independent ranking oracle that matched
+exactly through 1,300 studies.
+
+Launch evidence was frozen at **19:47:03 UTC** on September 22. Private notebook
+`willmurray99/rsna-knee-reference-blend`, version 1, was pushed once and is running.
+Hosted component parity, independent blend arithmetic and the requested single
+submission are pending; no candidate score or improvement is claimed. Evidence
+is under `artifacts/reports/reference-blend-v1/` and
+`artifacts/kaggle/reference-blend/versions/v1/`. The independent public best
+remains 0.819, and the locally selected three-window baseline remains 0.77478.

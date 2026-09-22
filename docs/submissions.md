@@ -1,6 +1,6 @@
 # Submission log
 
-Our best independently trained submission is **0.819** (ref **56471807**), up from **0.801** for three-window training, **0.780** for one-window adaptation, **0.718** for the frozen image model and **0.508** for metadata. All six submissions are complete. Three-window training remains the locally selected baseline because the ten-window diagnostic failed its local promotion rule. A separate reproduction of an externally trained image ensemble scored **0.891** (ref **56286555**).
+The reproduced public ensemble's **0.891** (ref **56286555**) is our primary submission baseline and best submitted score. Our best independently trained submission is **0.819** (ref **56471807**), up from **0.801** for three-window training, **0.780** for one-window adaptation, **0.718** for the frozen image model and **0.508** for metadata. All six submissions are complete. Three-window training remains the locally selected independent baseline because the ten-window diagnostic failed its local promotion rule. A fixed 90/10 public/independent rank blend is in private offline execution; it has not yet passed hosted parity or been submitted.
 
 This competition executes a notebook against hidden test data. Local example CSV validation is only a format check. Record actual submissions here when they happen.
 
@@ -245,3 +245,30 @@ model remains the locally selected baseline under the frozen rule; its public
 score is still 0.801. The ten-window candidate is now the best independent public
 submission, without retroactively changing local promotion or tuning another
 recipe from this result.
+
+## Fixed public-reference rank blend — version 1, execution pending
+
+The [registered experiment](reference-blend-plan.md) combines **90% public
+ensemble ranks and 10% independent all-ten-window ranks**, using ascending
+average-tie percentile ranks per target over the complete runtime test set. The
+parents are public-reference version 1, ref **56286555** (**0.891**), and
+independent all-window version 1, ref **56471807** (**0.819**). There is no valid
+local CV for this blend because public-checkpoint training exposure is unresolved.
+Labels, folds, checkpoints and image recipes remain unchanged.
+
+Private offline T4 notebook `willmurray99/rsna-knee-reference-blend`, version 1,
+was pushed once from clean, reviewed source
+`167eeefff68db2e003743de60e5f51a3e72e7010`, after **378 local tests** and passing
+Linux CI. Its notebook SHA-256 is
+`23e112a729b8574b4e815075156ed6da907755fc60c3b89207e2a8d0c602ae1d`.
+Both original notebook hashes, all twenty public members and the independent
+model/summary/schedule are pinned in the build and launch manifests.
+
+Execution is running. Component reproduction and independent blend arithmetic
+must pass before the single competition submission; no new submission reference
+or score exists yet. A public score strictly above 0.891 will be a provisional
+new best; equal or lower retains the pure public ensemble. No weight search or
+repeat tuning from leaderboard feedback is part of this experiment. Launch,
+verification and execution evidence lives under
+`artifacts/reports/reference-blend-v1/` and
+`artifacts/kaggle/reference-blend/versions/v1/`.
