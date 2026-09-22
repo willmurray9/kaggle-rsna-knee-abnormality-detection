@@ -152,13 +152,16 @@ def run_blend(data_root, working, notebooks, expected):
         remaining = WALL_BUDGET_SECONDS - (time.perf_counter() - started)
         if remaining <= 0:
             raise TimeoutError('Shared blend wall budget exhausted')
-        print(f'Starting {role}; shared budget remaining {remaining:.0f}s', flush=True)
         component_started = time.perf_counter()
-        subprocess.run([sys.executable, '-u', str(runner)], cwd=directory, check=True, timeout=remaining)
+        # Verbose model loaders must not depend on notebook output pipes draining.
+        with (directory / 'execution.log').open('xb') as log:
+            subprocess.run([sys.executable, '-u', str(runner)], cwd=directory, check=True,
+                           timeout=remaining, stdout=log, stderr=subprocess.STDOUT)
         component_seconds[role] = time.perf_counter() - component_started
         if any(sha256(data_root / name) != digest for name, digest in input_hashes.items()):
             raise ValueError('Runtime test metadata changed during component execution')
         verify_component(data_root, working, role, expected)
+        print(f'{role} completed and verified in {component_seconds[role]:.1f}s', flush=True)
     if time.perf_counter() - started >= WALL_BUDGET_SECONDS:
         raise TimeoutError('Shared blend wall budget exhausted')
     result = finalize_blend(data_root, working, expected, component_seconds)

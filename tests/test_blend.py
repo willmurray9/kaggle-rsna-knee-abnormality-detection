@@ -208,6 +208,7 @@ def test_failed_child_cannot_leave_a_root_candidate(tmp_path, role):
     working = tmp_path / 'actual'; working.mkdir()
     with pytest.raises(subprocess.CalledProcessError): module.run_blend(data, working, notebooks, expected)
     assert not (working / 'submission.csv').exists()
+    assert 'deliberate component failure' in (working / role / 'execution.log').read_text()
     if role == 'public': assert not (working / 'independent').exists()
 
 
@@ -216,10 +217,29 @@ def test_shared_remaining_budget_stops_first_child_and_does_not_launch_second(tm
     import hashlib
     import subprocess
     data, expected, notebooks = runnable_components(tmp_path)
-    notebooks['public'] = notebook_bytes(["import time\ntime.sleep(10)\n"])
+    notebooks['public'] = notebook_bytes(["import time\nprint('before timeout', flush=True)\ntime.sleep(10)\n"])
     expected['source_notebook_sha256']['public'] = hashlib.sha256(notebooks['public']).hexdigest()
-    monkeypatch.setattr(module, 'WALL_BUDGET_SECONDS', .1)
+    monkeypatch.setattr(module, 'WALL_BUDGET_SECONDS', .5)
     working = tmp_path / 'actual'; working.mkdir()
     with pytest.raises(subprocess.TimeoutExpired): module.run_blend(data, working, notebooks, expected)
     assert not (working / 'submission.csv').exists()
     assert not (working / 'independent').exists()
+    assert (working / 'public/execution.log').read_text() == 'before timeout\n'
+
+
+def test_verbose_children_write_directly_to_preserved_logs_without_notebook_output(tmp_path, capfd):
+    module = blend_module()
+    import hashlib
+    data, expected, notebooks = runnable_components(tmp_path)
+    for role in ('public', 'independent'):
+        cells = json.loads(notebooks[role])['cells']
+        cells[0]['source'].insert(0, "import os\nos.write(1, b'o' * 1048576)\nos.write(2, b'e' * 1048576)\n")
+        notebooks[role] = json.dumps({'cells': cells}).encode()
+        expected['source_notebook_sha256'][role] = hashlib.sha256(notebooks[role]).hexdigest()
+    working = tmp_path / 'actual'; working.mkdir()
+    result = module.run_blend(data, working, notebooks, expected)
+    output = capfd.readouterr()
+    assert result['status'] == 'complete'
+    for role in ('public', 'independent'):
+        assert (working / role / 'execution.log').read_bytes() == b'o' * 1048576 + b'e' * 1048576
+    assert len(output.out) < 1000 and output.err == ''

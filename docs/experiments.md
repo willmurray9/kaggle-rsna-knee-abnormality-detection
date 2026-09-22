@@ -700,3 +700,23 @@ submission are pending; no candidate score or improvement is claimed. Evidence
 is under `artifacts/reports/reference-blend-v1/` and
 `artifacts/kaggle/reference-blend/versions/v1/`. The independent public best
 remains 0.819, and the locally selected three-window baseline remains 0.77478.
+
+### Private execution recovery — September 22
+
+Version 1 remained RUNNING without an error while its live log stayed at two
+completed public members (session time 48.996 seconds, 262,324 logged bytes)
+across checks more than fifteen minutes apart. No blend or leaderboard result
+was available. Verbose subprocess output blocking in notebook file-descriptor
+capture is a plausible cause, consistent with an [upstream ipykernel issue](https://github.com/ipython/ipykernel/issues/847);
+the hosted evidence does not establish the cause conclusively.
+
+The sole recovery change sends each subprocess's stdout and stderr directly to
+its own exclusive `execution.log`, preserving logs on failure or timeout and
+printing only a compact completion message after verification. Both parent
+notebooks, their weights and preprocessing, rank arithmetic, the 90/10 recipe
+and shared eight-hour deadline are unchanged. All **379 local tests** pass.
+Independent review also verified completion with the parent's output pipes left
+undrained while eight MiB of child output was preserved in regular files.
+Version 2 will repeat the same example-parity and provenance gates before the
+single planned competition submission. This is an execution repair, not another
+model candidate or a change selected from leaderboard feedback.
