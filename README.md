@@ -2,7 +2,7 @@
 
 A small, explainable starting point for the [Kaggle competition](https://www.kaggle.com/competitions/rsna-knee-abnormality-detection), using the same basic structure as our soil-grain project.
 
-**Status:** our independently trained model's best public AUC is **0.801**, up from **0.780** for one-window encoder adaptation, **0.718** for the frozen image baseline and **0.508** for metadata. Three-window training achieved local AUC **0.77478** on the same 58 explicit-label studies; submission **56341808** completed successfully. A separate reproduction of a public competition-trained ensemble scored **0.891**; it has no valid local CV on our folds. The [independent improvement pass](docs/independent-improvement-plan.md) and [three-window follow-up](docs/multi-window-plan.md) are complete. See [experiments](docs/experiments.md) and [submission evidence](docs/submissions.md). Final deadline: **October 22, 2026, 23:59 UTC**.
+**Status:** our independently trained model's best public AUC is **0.801**, up from **0.780** for one-window encoder adaptation, **0.718** for the frozen image baseline and **0.508** for metadata. Three-window training achieved local AUC **0.77478** on the same 58 explicit-label studies; submission **56341808** completed successfully. The [all-ten-window comparison](docs/all-window-plan.md) scored **0.76965** locally and failed promotion; diagnostic submission **56471807** is awaiting Kaggle scoring. Three-window training remains selected. A separate reproduction of a public competition-trained ensemble scored **0.891**; it has no valid local CV on our folds. See [experiments](docs/experiments.md) and [submission evidence](docs/submissions.md). Final deadline: **October 22, 2026, 23:59 UTC**.
 
 The key challenge is supervision: the current training CSV has **4,407 studies**, but only **58 have the 12 condition labels**. All have reports; test studies do not. Missing labels must stay unknown. See [competition details](docs/competition.md) and the [roadmap](docs/roadmap.md).
 
@@ -21,7 +21,7 @@ its quality checks, so none of its annotations entered training.
 
 The September 17 follow-up tested six trainable encoder blocks against the
 current two-block model. Local AUC fell from 0.75991 to 0.74828, so it was rejected
-and our independent public best remains **0.780**. A [fresh 24-report audit](docs/label-sanity-v2.md)
+and our independent public best at that point remained **0.780**. A [fresh 24-report audit](docs/label-sanity-v2.md)
 found threshold mismatches and explicit report/label contradictions; training
 labels remain unchanged. A subsequent matched test of the public labels' graded
 scores scored 0.75995 versus 0.75991, improving only one of three folds. It failed
@@ -34,6 +34,13 @@ three slices and 768 features per window while training jointly on three windows
 per plane. Labels and model parameter counts are unchanged. Offline inference
 matched the saved predictions exactly; submission **56341808** completed with
 public AUC **0.801**, our new independent best, **+0.021** over 0.780.
+
+The September 22 [all-ten-window comparison](docs/all-window-plan.md) exactly
+reproduced the saved three-window control. Training on all ten windows scored
+**0.76965 versus 0.77478**, improving two folds but lowering the mean by **0.00512**.
+It failed the promotion rule with labels and folds unchanged. The three-window
+model remains selected. Offline inference matched the saved predictions exactly;
+diagnostic submission **56471807** is awaiting Kaggle scoring.
 
 ## Start here
 

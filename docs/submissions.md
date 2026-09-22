@@ -1,6 +1,6 @@
 # Submission log
 
-Our best independently trained submission is now **0.780** (ref **56290319**), up from **0.718** for the frozen image model and **0.508** for metadata. All four submissions are complete. A separate reproduction of an externally trained image ensemble scored **0.891** (ref **56286555**).
+Our best independently trained submission is **0.801** (ref **56341808**), up from **0.780** for one-window adaptation, **0.718** for the frozen image model and **0.508** for metadata. Five submissions are complete; the all-ten-window diagnostic submission **56471807** is awaiting scoring. A separate reproduction of an externally trained image ensemble scored **0.891** (ref **56286555**).
 
 This competition executes a notebook against hidden test data. Local example CSV validation is only a format check. Record actual submissions here when they happen.
 
@@ -10,6 +10,8 @@ This competition executes a notebook against hidden test data. Local example CSV
 | 2026-09-16 19:50:10 | [RSNA Knee Image Reference](https://www.kaggle.com/code/willmurray99/rsna-knee-image-reference), version **1**; ref **56286555** | Working-tree packager; versioned notebook hash below | Versioned build, weights and execution manifests | Audited public image reference; all 20 members × 10 windows passed private offline GPU example execution | **0.891**, COMPLETE | Best submitted public score; external competition-trained ensemble, with no valid CV result on our saved folds. |
 | 2026-09-16 20:37:58 | [RSNA Knee Independent Image](https://www.kaggle.com/code/willmurray99/rsna-knee-independent-image), version **1**; ref **56287107** | `3b79c70` + recorded source snapshots/hashes | Versioned build, model and inference manifests | Quarter-weight report supervision selected on corrected frozen folds; PCA-32 rejected; offline parity verified | **0.718**, COMPLETE | Successful hidden-test result, +0.210 over metadata; retain as independent image baseline. |
 | 2026-09-17 00:50:24 | [RSNA Knee Adapted Image](https://www.kaggle.com/code/willmurray99/rsna-knee-adapted-image), version **1**; ref **56290319** | `3b79c70` + exact working-tree training/inference source hashes | Versioned training, build, selection and parity manifests | Highest eligible local mean AUC **0.759911**; improves all three folds over original and matched frozen control; exact offline parity | **0.780**, COMPLETE | New independently trained best, **+0.062** over 0.718; no recipe changes from leaderboard feedback. |
+| 2026-09-18 22:04:43 | [RSNA Knee Multi Window Image](https://www.kaggle.com/code/willmurray99/rsna-knee-multi-window-image), version **1**; ref **56341808** | `2f4daefd1cc0baddf08807867edbd5dd346df2e5` | Full hashes below | Local AUC **0.774776**, all three folds improve over exactly reproduced one-window control; exact offline parity | **0.801**, COMPLETE | Independent best, **+0.021** over 0.780. |
+| 2026-09-22 18:38:27 | [RSNA Knee All Window Image](https://www.kaggle.com/code/willmurray99/rsna-knee-all-window-image), version **1**; ref **56471807** | `ec3b6867c8be8b081ba8215054450fe794585c82` | Full hashes below | User-requested diagnostic; local **0.769655** fails promotion versus **0.774776**; exact offline parity | Pending | Retain three-window baseline; decision frozen before public feedback. |
 
 Keep training/weight/config hashes with each run; record the generated CSV hash where available. Preserve the local validation result before viewing the leaderboard score.
 
@@ -185,3 +187,53 @@ description, at **22:39:52 UTC**. `scoring_result.json` preserves the response.
 This is our new independent best, **+0.021** over 0.780. The approximately
 35-minute interval includes queueing and does not measure hidden inference
 alone. No model or selection change followed the leaderboard result.
+
+## Independent all-ten-window diagnostic — version 1
+
+The September 22 experiment trains jointly on all ten cached three-slice windows
+per MRI plane. Each window still yields 768 features; inference coverage,
+architecture, binary supervision and saved folds are unchanged. No new labels
+were generated. All eight comparison fits completed in **10,026.11 seconds**
+from clean, pushed source `ec3b6867c8be8b081ba8215054450fe794585c82`.
+
+The three-window control exactly reproduced the saved predictions, epoch losses
+and recorded checkpoint hashes. Ten-window local mean AUC was **0.769655** versus
+**0.774776**, improving two folds but failing the required mean improvement.
+Independent verification agreed. The three-window model remains selected;
+`selection.json` froze this decision at **18:35:16 UTC**, before public feedback.
+As preregistered, this one requested candidate submission is diagnostic despite
+failed local promotion. See [experiments](experiments.md) for target tradeoffs,
+bootstrap uncertainty and validation limitations.
+
+Private offline notebook `willmurray99/rsna-knee-all-window-image`, version 1,
+completed the three visible examples in **16.556 seconds**. Predictions matched
+the training-run output exactly (maximum absolute difference **0**), passing the
+fixed absolute/relative 1e-4 tolerances. The actual checkpoint, training summary,
+window schedule, test metadata and all twelve packaged source files were verified.
+IDs and all twelve probabilities per study passed validation. Dynamic-ID tests
+cover 1,300 replacement studies. These example checks are separate from hidden
+test scoring; inference needs no reports or labels.
+
+| Artifact | SHA-256 |
+| --- | --- |
+| Diagnostic candidate full model | `d1a796a6945837c7a503271bfb31d028671d41caa340c89349a8972082861172` |
+| Training summary | `fb0902ed78f61f31027854e8e35c2264962f04f8c83bc3ee5dcb68bae36ddc9f` |
+| Submitted notebook | `3b4ce9dd29b6f5c0bfe8d4e7f5885c979efd1a2d4ba43d7a33a81e9f65150100` |
+| Kaggle example CSV | `d705fc6602a8844b39c6ebd599eb33bc48e80a4f855f2bea4327ef7de92dfd88` |
+| Frozen selection | `1f4a36b15777280d18f41d8c34e2b9483025c2637cac007660a6b0d830348add` |
+| Unchanged image split | `23c611d98c910549c5c143b30de436d4217214aae239f15850cf02db2cd6ba21` |
+
+Training checkpoints remain in private
+`willmurray99/rsna-knee-all-window-training`, version 1. Compact comparison,
+independent verification and frozen decision records live under
+`artifacts/reports/all-window-v1/`. Training evidence is under
+`artifacts/kaggle/all-window-training/versions/v1/output/`; inference, exact
+parity, request and scoring records are under
+`artifacts/kaggle/all-window-image/versions/v1/`. The example CSV hash identifies
+the visible three rows only. Source validation passed **336 local tests** and
+**335 Linux CI tests**, with one expected optional integration skip in CI.
+
+Kaggle accepted submission **56471807**, requested at **18:38:27 UTC** on
+September 22. Authenticated status at **18:38:34 UTC** was **PENDING**, without
+an error description or public score. Scoring is still pending; the selected
+three-window baseline and independent public best **0.801** remain unchanged.
