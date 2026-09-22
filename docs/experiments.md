@@ -555,3 +555,15 @@ This improves our independent public best by **0.021** over 0.780. No model or
 selection change followed the leaderboard result. See [submission evidence](submissions.md).
 Local evidence is under `artifacts/reports/multi-window-v1/`; training outputs
 are in `artifacts/kaggle/multi-window-training/versions/v1/output/adaptation/`.
+
+## All ten training windows per plane: preregistered September 22
+
+Compare the current three-window model with all ten cached windows jointly during
+training. Labels, folds, architecture, six epochs and all-ten-window inference
+stay fixed. The candidate still uses three slices and 768 features per window.
+[The fixed recipe](all-window-plan.md) records control reproduction, compute,
+local promotion and technical submission gates. The user requested execution
+through a new submission; a technically valid candidate that fails local promotion
+will be submitted only as a diagnostic, without replacing the selected baseline.
+No outcome is known at preregistration. Commit and push source before launch and
+record the outcome separately.
