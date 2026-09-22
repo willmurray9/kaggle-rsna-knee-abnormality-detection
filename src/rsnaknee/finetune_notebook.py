@@ -85,7 +85,8 @@ print(json.dumps({'status': result['status'], 'probe': result['probe'],
                   'arms': result['arms'], 'runtime_seconds': result['runtime_seconds']}, indent=2))
 '''
     depths = ', '.join(f'{arm}: final {TRAINABLE_BLOCKS[arm]} blocks trainable' for arm in arms)
-    title = ('RSNA Knee Multi Window Training' if 'multi_windows' in arms else
+    title = ('RSNA Knee All Window Training' if 'all_windows' in arms else
+             'RSNA Knee Multi Window Training' if 'multi_windows' in arms else
              'RSNA Knee Soft Target Training' if 'soft_targets' in arms else
              'RSNA Knee Depth Training' if 'deep_blocks' in arms else 'RSNA Knee Adaptation Training')
     targets = ', '.join(f'{arm}: {TARGET_MODES[arm]}' for arm in arms)
@@ -150,7 +151,7 @@ def verify_arm_provenance(summary, arm):
 
     fit = summary['arms'][arm]['final_fit']
     adaptation = fit.get('encoder_adaptation')
-    if adaptation is not None or arm in ('deep_blocks', 'soft_targets', 'multi_windows'):
+    if adaptation is not None or arm in ('deep_blocks', 'soft_targets', 'multi_windows', 'all_windows'):
         blocks = TRAINABLE_BLOCKS[arm]
         total = (adaptation or {}).get('encoder_blocks', 0)
         if (not adaptation or adaptation.get('arm') != arm or total < blocks
@@ -159,7 +160,7 @@ def verify_arm_provenance(summary, arm):
                 or adaptation.get('final_layernorm_trainable') != bool(blocks)):
             raise ValueError('Encoder adaptation provenance differs from chosen arm')
     if ('target_mode' in fit or 'target_mode_by_arm' in summary.get('recipe', {})
-            or arm in ('soft_targets', 'multi_windows')):
+            or arm in ('soft_targets', 'multi_windows', 'all_windows')):
         if (fit.get('target_mode') != TARGET_MODES[arm]
                 or summary.get('recipe', {}).get('target_mode_by_arm', {}).get(arm) != TARGET_MODES[arm]):
             raise ValueError('Target mode provenance differs from chosen arm')
@@ -170,28 +171,34 @@ def verify_arm_provenance(summary, arm):
                 raise ValueError('Target/weight provenance hash missing or invalid')
     if ('train_windows_per_plane' in fit or 'window_schedule_by_arm' in summary
             or isinstance(summary.get('recipe', {}).get('train_windows_per_plane'), dict)
-            or arm == 'multi_windows'):
+            or arm in ('multi_windows', 'all_windows')):
         count = TRAIN_WINDOWS_PER_PLANE[arm]
         counts = summary.get('recipe', {}).get('train_windows_per_plane')
         schedules = summary.get('window_schedule_by_arm')
         schedule = schedules.get(arm, {}) if isinstance(schedules, dict) else {}
-        artifact = 'multi_window_indices.npy' if count == 3 else 'window_indices.npy'
+        artifact = {1: 'window_indices.npy', 3: 'multi_window_indices.npy', 10: 'all_window_indices.npy'}[count]
         if (not isinstance(counts, dict) or counts.get(arm) != count
                 or fit.get('train_windows_per_plane') != count
                 or not isinstance(schedule, dict)
                 or schedule.get('train_windows_per_plane') != count
                 or schedule.get('artifact') != artifact
+                or (arm == 'all_windows' and fit.get('artifact') != artifact)
                 or fit.get('window_schedule_sha256') != schedule.get('window_schedule_sha256')):
             raise ValueError('Window schedule provenance differs from chosen arm')
         for digest in (schedule.get('window_schedule_sha256'), summary.get(Path(artifact).stem + '_sha256')):
             if (not isinstance(digest, str) or len(digest) != 64
                     or any(char not in '0123456789abcdef' for char in digest)):
                 raise ValueError('Window schedule provenance hash missing or invalid')
+        if arm == 'all_windows':
+            digest = summary.get('window_study_ids_sha256')
+            if (not isinstance(digest, str) or len(digest) != 64
+                    or any(char not in '0123456789abcdef' for char in digest)):
+                raise ValueError('Window study IDs provenance hash missing or invalid')
 
 
 def verify_inference_inputs(training_dir, checkpoint_dir, expected):
     import hashlib
-    from rsnaknee.finetune import TRAINABLE_BLOCKS
+    from rsnaknee.finetune import TRAINABLE_BLOCKS, arm_window_schedule
 
     summary_path = training_dir / 'summary.json'
     if sha256(summary_path) != expected['summary_sha256']:
@@ -210,6 +217,16 @@ def verify_inference_inputs(training_dir, checkpoint_dir, expected):
         table = np.load(path, allow_pickle=False)
         if hashlib.sha256(table.tobytes(order='C')).hexdigest() != schedule['window_schedule_sha256']:
             raise ValueError('Window schedule provenance table hash differs')
+        if arm == 'all_windows':
+            ids_path = training_dir / 'window_study_ids.csv'
+            if not ids_path.is_file() or sha256(ids_path) != summary['window_study_ids_sha256']:
+                raise ValueError('Window study IDs provenance file hash differs')
+            study_ids = pd.read_csv(ids_path, dtype=str)
+            if (list(study_ids.columns) != [ID_COLUMN] or study_ids.empty
+                    or study_ids[ID_COLUMN].isna().any() or study_ids[ID_COLUMN].duplicated().any()
+                    or study_ids[ID_COLUMN].str.strip().eq('').any()):
+                raise ValueError('Invalid window study IDs')
+            arm_window_schedule(table, arm, len(study_ids))
     model_path = training_dir / arm / 'model.pt'
     if sha256(model_path) != summary['arms'][arm]['final_fit']['checkpoint_sha256']:
         raise ValueError('Chosen independent model hash differs')
@@ -272,7 +289,7 @@ def build_inference_notebook(summary_path: Path, arm: str, output: Path,
     if (summary.get('status') != 'complete' or arm not in summary.get('arms', {})
             or arm not in TRAINABLE_BLOCKS):
         raise ValueError('Choose one completed independent adaptation arm')
-    if arm in ('soft_targets', 'multi_windows') or 'window_schedule_by_arm' in summary:
+    if arm in ('soft_targets', 'multi_windows', 'all_windows') or 'window_schedule_by_arm' in summary:
         verify_arm_provenance(summary, arm)
     package = Path(__file__).parent
     for name in SOURCES:
@@ -307,7 +324,8 @@ result = run_inference(roots[0], checkpoints[0], training_dirs[0], EXPECTED, wor
 (working / 'inference_manifest.json').write_text(json.dumps(result, indent=2) + '\\n')
 print(json.dumps(result, indent=2))
 '''
-    title = ('RSNA Knee Multi Window Image' if arm == 'multi_windows' else
+    title = ('RSNA Knee All Window Image' if arm == 'all_windows' else
+             'RSNA Knee Multi Window Image' if arm == 'multi_windows' else
              'RSNA Knee Soft Target Image' if arm == 'soft_targets' else
              'RSNA Knee Deep Image' if arm == 'deep_blocks' else 'RSNA Knee Adapted Image')
     _write_notebook(output, kernel_id, title, 'adapted-image.ipynb', [
@@ -338,8 +356,9 @@ if __name__ == '__main__':
     parser.add_argument('--output', type=Path, required=True)
     parser.add_argument('--kernel-id')
     parser.add_argument('--summary', type=Path)
-    parser.add_argument('--arm', choices=tuple(TRAINABLE_BLOCKS))
-    parser.add_argument('--arms', nargs='+', choices=tuple(TRAINABLE_BLOCKS), default=ARMS)
+    parser.add_argument('--arm', choices=tuple(TRAINABLE_BLOCKS), help='Inference arm; requires --summary')
+    parser.add_argument('--arms', nargs='+', choices=tuple(TRAINABLE_BLOCKS), default=ARMS,
+                        help='Training arms (default: frozen late_blocks); use multi_windows all_windows for 3 versus 10 windows per plane')
     parser.add_argument('--training-kernel-id', default='willmurray99/rsna-knee-adaptation-training')
     args = parser.parse_args()
     if args.summary or args.arm:

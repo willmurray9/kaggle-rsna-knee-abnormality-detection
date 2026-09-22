@@ -26,10 +26,12 @@ from rsnaknee.window_model import (AttentionHead, BATCH_SIZE, EPOCHS, GENERIC_WE
                                   SEED, build_supervision, masked_bce)
 
 ARMS = ('frozen', 'late_blocks')
-TRAINABLE_BLOCKS = {'frozen': 0, 'late_blocks': 2, 'deep_blocks': 6, 'soft_targets': 2, 'multi_windows': 2}
+TRAINABLE_BLOCKS = {'frozen': 0, 'late_blocks': 2, 'deep_blocks': 6, 'soft_targets': 2, 'multi_windows': 2,
+                    'all_windows': 2}
 TARGET_MODES = {'frozen': 'binary', 'late_blocks': 'binary', 'deep_blocks': 'binary',
-                'soft_targets': 'public_scores', 'multi_windows': 'binary'}
-TRAIN_WINDOWS_PER_PLANE = {arm: 3 if arm == 'multi_windows' else 1 for arm in TRAINABLE_BLOCKS}
+                'soft_targets': 'public_scores', 'multi_windows': 'binary', 'all_windows': 'binary'}
+TRAIN_WINDOWS_PER_PLANE = {arm: 10 if arm == 'all_windows' else 3 if arm == 'multi_windows' else 1
+                           for arm in TRAINABLE_BLOCKS}
 BUDGET_SECONDS = 7.5 * 3600
 PROBE_STEPS = 64
 
@@ -71,11 +73,21 @@ def multi_window_indices(study_ids) -> np.ndarray:
     return table
 
 
+def all_window_indices(study_ids) -> np.ndarray:
+    """Use all ten identities per plane in every epoch; no window sampling."""
+    ids = list(study_ids)
+    if len(set(ids)) != len(ids):
+        raise ValueError('Window schedule requires unique study IDs')
+    return np.tile(np.arange(10, dtype=np.uint8), (EPOCHS, len(ids), 3, 1))
+
+
 def arm_window_schedule(tables, arm, study_count):
     table = tables[arm] if isinstance(tables, dict) else tables
-    shape = (EPOCHS, study_count, 3) + ((3,) if TRAIN_WINDOWS_PER_PLANE[arm] == 3 else ())
+    count = TRAIN_WINDOWS_PER_PLANE[arm]
+    shape = (EPOCHS, study_count, 3) + ((count,) if count > 1 else ())
     if (not isinstance(table, np.ndarray) or table.shape != shape or table.dtype != np.uint8
             or not np.isin(table, range(10)).all()
+            or (arm == 'all_windows' and not np.all(table == np.arange(10)))
             or (table.ndim == 4 and np.any(np.diff(np.sort(table.astype(int), axis=-1), axis=-1) == 0))):
         raise ValueError('Invalid window schedule for arm: ' + arm)
     return table
@@ -84,7 +96,8 @@ def arm_window_schedule(tables, arm, study_count):
 def window_schedule_provenance(table, arm):
     return {'train_windows_per_plane': TRAIN_WINDOWS_PER_PLANE[arm],
             'window_schedule_sha256': hashlib.sha256(table.tobytes(order='C')).hexdigest(),
-            'artifact': 'multi_window_indices.npy' if arm == 'multi_windows' else 'window_indices.npy'}
+            'artifact': 'all_window_indices.npy' if arm == 'all_windows' else
+                        'multi_window_indices.npy' if arm == 'multi_windows' else 'window_indices.npy'}
 
 
 def slot_logits(head: AttentionHead, features: torch.Tensor, mask: torch.Tensor) -> torch.Tensor:
@@ -137,10 +150,11 @@ class MRIModel(nn.Module):
                 or not np.all(presence.sum(1) > 0)):
             raise ValueError('Require uint8 twelve-slice pixels and usable binary presence')
         if windows is not None:
-            if (not isinstance(windows, np.ndarray) or windows.shape not in (presence.shape, (*presence.shape, 3))
+            if (not isinstance(windows, np.ndarray) or windows.shape not in
+                    (presence.shape, (*presence.shape, 3), (*presence.shape, 10))
                     or not np.issubdtype(windows.dtype, np.integer) or not np.isin(windows, range(10)).all()
                     or (windows.ndim == 3 and np.any(np.diff(np.sort(windows.astype(int), axis=-1), axis=-1) == 0))):
-                raise ValueError('Require one or three distinct valid integer windows per plane')
+                raise ValueError('Require one, three or ten distinct valid integer windows per plane')
         locations = [(row, plane, window) for row in range(len(pixels)) for plane in range(3)
                      if presence[row, plane] for window in
                      (range(10) if windows is None else
@@ -301,7 +315,7 @@ def throughput_probe(factory, pixels, presence, labels, cache_rows, table, elaps
             rows, targets, weights, _ = training_partition(labels, 0, target_mode=mode)
             supervision[arm] = supervision_provenance(mode, targets, weights)
             probe_rows = np.arange(len(rows))
-            if arm == 'multi_windows':
+            if arm in ('multi_windows', 'all_windows'):
                 probe_rows = np.flatnonzero(np.asarray(presence[cache_rows[rows]]).all(1))
                 if len(probe_rows) < BATCH_SIZE:
                     raise ValueError('Multi-window probe requires eight distinct full-plane training studies')
@@ -432,7 +446,8 @@ def run_comparison(cache_dir: Path, checkpoint_dir: Path, labels_path: Path, out
     if observed.sum() != 58 or gold.loc[observed].isna().any().any():
         raise ValueError('Expected exactly 58 complete gold validation studies')
     table = window_indices(labels.index)
-    tables = {arm: multi_window_indices(labels.index) if arm == 'multi_windows' else table for arm in arms}
+    tables = {arm: all_window_indices(labels.index) if arm == 'all_windows' else
+                   multi_window_indices(labels.index) if arm == 'multi_windows' else table for arm in arms}
     torch.set_num_threads(1)
     torch.use_deterministic_algorithms(True)
     def factory(arm):
@@ -445,6 +460,8 @@ def run_comparison(cache_dir: Path, checkpoint_dir: Path, labels_path: Path, out
     np.save(output / 'window_indices.npy', table)
     if 'multi_windows' in arms:
         np.save(output / 'multi_window_indices.npy', tables['multi_windows'])
+    if 'all_windows' in arms:
+        np.save(output / 'all_window_indices.npy', tables['all_windows'])
     pd.DataFrame({ID_COLUMN: labels.index}).to_csv(output / 'window_study_ids.csv', index=False)
     for source in (labels_path, labels_path.with_name('folds.csv'), audit_path, cache_dir / 'manifest.json'):
         shutil.copy2(source, output / ('feature_manifest.json' if source.name == 'manifest.json' else source.name))
@@ -476,6 +493,8 @@ def run_comparison(cache_dir: Path, checkpoint_dir: Path, labels_path: Path, out
     summary_path = output / 'summary.json'
     if 'multi_windows' in arms:
         summary['multi_window_indices_sha256'] = sha256(output / 'multi_window_indices.npy')
+    if 'all_windows' in arms:
+        summary['all_window_indices_sha256'] = sha256(output / 'all_window_indices.npy')
     summary_path.write_text(json.dumps(summary, indent=2) + '\n')
     try:
         probe = throughput_probe(factory, pixels, presence, labels, cache_rows, tables, time.perf_counter() - started,
@@ -546,6 +565,7 @@ if __name__ == '__main__':
     parser.add_argument('--labels', type=Path, default=Path('data/processed/image-v1/report_labels.csv'))
     parser.add_argument('--label-audit', type=Path, default=Path('artifacts/reports/label_audit_image_v1.json'))
     parser.add_argument('--output', type=Path, required=True)
-    parser.add_argument('--arms', nargs='+', choices=tuple(TRAINABLE_BLOCKS), default=ARMS)
+    parser.add_argument('--arms', nargs='+', choices=tuple(TRAINABLE_BLOCKS), default=ARMS,
+                        help='Matched arms to train; compare multi_windows (3 per plane) with all_windows (10 per plane)')
     args = parser.parse_args()
     run_comparison(args.cache, args.checkpoint, args.labels, args.output, args.label_audit, arms=args.arms)
