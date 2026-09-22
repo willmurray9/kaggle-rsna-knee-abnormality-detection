@@ -26,7 +26,7 @@ our new independent best, **+0.062** over 0.718. The
 **September 17 follow-up:** a fresh 24-report audit and the fixed-label depth
 comparison are complete. The two-block control exactly reproduced its saved
 predictions; six-block adaptation scored 0.74828 versus 0.75991 and was rejected.
-The independent public best remains **0.780**. The [audit](label-sanity-v2.md)
+The independent public best at that point remained **0.780**. The [audit](label-sanity-v2.md)
 found threshold mismatches and report contradictions, with most threshold
 disagreements concentrated in lower public score tiers. The subsequent matched
 test of preserved graded scores scored 0.75995 versus 0.75991 but improved only
@@ -44,6 +44,18 @@ per window, the same architecture and binary labels, and all ten windows per
 plane at inference. Offline predictions matched exactly and submission
 **56341808** completed with public AUC **0.801**, improving our independent best
 by **0.021**. See [the plan and outcome](multi-window-plan.md).
+
+**September 22 follow-up:** training jointly on all ten windows scored **0.76965**
+against the exactly reproduced three-window control's **0.77478**. Two folds
+improved, but the lower mean failed the fixed promotion rule; the paired 95%
+bootstrap interval for the difference was **[−0.030818, +0.017147]**. Labels,
+folds and architecture stayed fixed. The 2.79-hour comparison fit the compute
+budget. Three-window training remains selected at **0.801** public AUC. A
+requested diagnostic submission of the ten-window model passed exact offline
+prediction parity; submission **56471807** completed with public AUC **0.819**,
+our new independent public best (**+0.018**). The local selection decision remains
+unchanged; the disagreement warrants stronger validation rather than tuning to
+this leaderboard result. See [the plan and outcome](all-window-plan.md).
 
 ## 1. Working foundation — complete
 

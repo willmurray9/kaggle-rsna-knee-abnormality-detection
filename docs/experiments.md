@@ -13,6 +13,7 @@ Keep one row per hypothesis. Detailed outputs live under `artifacts/experiments/
 | 2026-09-16 | coverage-attention-v1 | A small learned diagnosis-specific aggregator of the same frozen window cache may outperform fixed mean pooling and linear heads. Fixed six epochs, 128 hidden units, dropout 0.2, AdamW LR 0.001/weight decay 0.02, batch eight, seed 20260916; silver weight 0.25. | Mean AUC **0.707859**, delta **+0.010047** versus original; **−0.004235** versus coverage mean | Passes original-reference rule but does not improve on mean coverage; retain as a completed comparison. No epoch or hyperparameter search followed. |
 | 2026-09-16 | coverage-adaptation-v1 | Compare frozen versus final-two-block DINOv2 adaptation on identical uint8 pixels and deterministic sampled training windows. Same attention head, six epochs, batch eight, AdamW head LR 0.001/backbone LR 0.000008, decay 0.02, silver weight 0.25; all windows at inference. | Frozen control **0.697164**; adapted **0.759911**. Adaptation improves all three folds versus both control and original; complete job 1,832.16 seconds | Adapted final refit selected before leaderboard feedback. Exact offline parity passed; submission **56290319 COMPLETE**, public AUC **0.780**, new independent best. |
 | 2026-09-17 | depth-adaptation-v1 | Train final six versus two DINOv2 blocks; keep labels, saved folds, pixels, head, six epochs, optimizer and sampling fixed. Rerun the two-block control and compare against the saved reference. | Two-block control **0.759911**, exactly reproducing saved predictions; six-block candidate **0.748275**, delta **−0.011635**, one of three folds improves; complete job 2,258.52 seconds | Rejected by the preregistered rule. Retain independent public best **0.780**; no new submission or per-target blend. |
+| 2026-09-22 | all-window-v1 | Train on all ten versus three windows per plane with unchanged labels, folds, architecture and six-epoch recipe. | Three-window control exactly reproduced **0.774776**; ten windows **0.769655**, delta **−0.005122**, two folds improve; 2.79-hour comparison | Local promotion failed; three-window baseline retained. Requested diagnostic submission **56471807 COMPLETE**, public **0.819**, new independent public best **+0.018**. No leaderboard-driven retuning. |
 
 The independent improvement pass is specified in
 [its plan](independent-improvement-plan.md). The separate 120-report rules pilot
@@ -555,3 +556,104 @@ This improves our independent public best by **0.021** over 0.780. No model or
 selection change followed the leaderboard result. See [submission evidence](submissions.md).
 Local evidence is under `artifacts/reports/multi-window-v1/`; training outputs
 are in `artifacts/kaggle/multi-window-training/versions/v1/output/adaptation/`.
+
+## All ten training windows per plane: preregistered September 22
+
+Compare the current three-window model with all ten cached windows jointly during
+training. Labels, folds, architecture, six epochs and all-ten-window inference
+stay fixed. The candidate still uses three slices and 768 features per window.
+[The fixed recipe](all-window-plan.md) records control reproduction, compute,
+local promotion and technical submission gates. The user requested execution
+through a new submission; a technically valid candidate that fails local promotion
+will be submitted only as a diagnostic, without replacing the selected baseline.
+No outcome is known at preregistration. Commit and push source before launch and
+record the outcome separately.
+
+### All-ten-window local outcome: promotion failed
+
+Private offline notebook `willmurray99/rsna-knee-all-window-training`, version 1,
+completed on September 22. The comparison took **10,026.11 seconds** (2.79 hours)
+from clean, pushed source `ec3b6867c8be8b081ba8215054450fe794585c82`.
+Prelaunch verification passed **336 local tests**, Linux CI, independent source
+review, exact synthetic control parity and a generated-notebook smoke build.
+The outcome analyzer was frozen before launch; the supplemental independent
+verifier was frozen before outcome analysis, without reading candidate outcomes.
+
+| Recipe | Fold 0 | Fold 1 | Fold 2 | Mean AUC |
+| --- | ---: | ---: | ---: | ---: |
+| Saved three-window reference | 0.805081 | 0.740177 | 0.779072 | **0.774776** |
+| Rerun three-window control | 0.805081 | 0.740177 | 0.779072 | **0.774776** |
+| All-ten-window candidate | 0.779243 | 0.742395 | 0.787327 | **0.769655** |
+
+The control reproduces all 696 held-out probabilities exactly (maximum absolute
+difference zero), all 24 epoch losses and all four recorded checkpoint hashes.
+The candidate improves two of three folds, with fold differences
+**−0.025837, +0.002218 and +0.008255**, but lowers mean within-fold macro AUC by
+**0.005122**. It therefore fails the registered promotion rule against both saved
+and rerun controls. Fold AUC sample standard deviation (`ddof=1`) is 0.023952 for ten windows
+and 0.032664 for three windows.
+
+The paired within-fold 95% bootstrap interval for the mean difference is
+**[−0.030818, +0.017147]**, with 704 valid draws from 1,000 attempts at seed
+20260916. It holds fitted predictions fixed, excludes draws with undefined target
+AUC and omits training, split and selection uncertainty. The 58 gold studies have
+been repeatedly reused; patient and public-label-extractor independence remain
+unresolved. This failed promotion does not establish that more windows are
+generally harmful.
+
+Mean within-fold target AUCs show three improvements and nine declines:
+
+| Target | Three windows | Ten windows | Difference |
+| --- | ---: | ---: | ---: |
+| ACL | 0.606508 | 0.646243 | +0.039735 |
+| MCL | 0.689542 | 0.684232 | −0.005310 |
+| Medial Meniscus | 0.673464 | 0.649811 | −0.023653 |
+| Lateral Meniscus | 0.778811 | 0.752066 | −0.026745 |
+| Medial OA | 0.939236 | 0.893204 | −0.046032 |
+| Lateral OA | 0.776353 | 0.724893 | −0.051460 |
+| PF OA | 0.829876 | 0.828322 | −0.001554 |
+| Effusion | 0.883862 | 0.883069 | −0.000794 |
+| Synovitis | 0.755269 | 0.729949 | −0.025320 |
+| Baker's | 0.861161 | 0.886012 | +0.024851 |
+| Contusion | 0.732601 | 0.796947 | +0.064347 |
+| Fracture | 0.770635 | 0.761111 | −0.009524 |
+
+Both arms preserve the binary label table, frozen folds, exact training-ID order,
+target/weight fingerprints, generic initialization, library versions and trainable
+parameter counts for corresponding fits. Each final fit uses all **4,354**
+supervised studies with **696 official and 37,920 derived target cells**; unknowns
+remain masked. No new labels were generated. Ten windows expose all twelve cached
+slice positions jointly, while three sampled windows cover a mean 7.335 positions
+per scheduled plane. Image exposure, attention context and removal of window
+sampling change together; this comparison does not isolate their effects. No
+per-target blending or retuning follows the target results.
+
+Both 64-step probes used batches of eight studies with three present planes.
+Peak allocated/reserved CUDA memory was **3.670/4.041 GB** for ten windows and
+**1.274/1.491 GB** for three windows on a **15.636 GB** device. The
+**12,649.81-second** projection passed the 7.5-hour gate; all six epochs, three
+folds and final refits completed without a recipe fallback. The cached-pixel
+inference projection excludes DICOM preparation.
+
+The primary analyzer verified 63 compact artifact hashes across the reference
+and new runs. A separate verifier recomputed official truth from the original
+`train.csv`, fold/target AUCs, bootstrap and promotion, and checked all eight new
+fits, complete final-fit membership, fold exclusions and target/weight hashes.
+It agreed with the local decision. Only **45 compact output files (11.81 MB)**
+were downloaded; MRI, pixel-cache and checkpoint bytes remain on Kaggle.
+
+The selected baseline remains the saved three-window model: local AUC
+**0.77478**, public AUC **0.801**. The requested one-time ten-window submission is
+**diagnostic**. Selection was frozen at **18:35:16 UTC** before public feedback.
+Private offline inference passed checkpoint/source/schedule/metadata validation
+and exact visible-example prediction parity in **16.556 seconds**. Submission
+**56471807** completed with public AUC **0.819**, confirmed at **19:10:45 UTC**,
+our new independent public best (**+0.018** over 0.801). The local promotion
+decision remains unchanged. Opposite local and public differences highlight the
+limits of 58 reused gold cases; this result does not establish which validation
+or distribution factors caused the disagreement. No further candidate or
+per-target blend was tuned from the leaderboard score. See
+[submission evidence](submissions.md). Local evidence is under
+`artifacts/reports/all-window-v1/`, including `comparison/comparison.json` and
+`independent_outcome_verification.json`; training outputs are in
+`artifacts/kaggle/all-window-training/versions/v1/output/adaptation/`.

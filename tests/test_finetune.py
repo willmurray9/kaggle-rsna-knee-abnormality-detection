@@ -91,7 +91,8 @@ def test_real_gradient_updates_only_authorized_parameters_and_unknowns_zero(arm)
         assert any(name.startswith(prefix) for name in changed) == (arm == 'late_blocks')
 
 
-@pytest.mark.parametrize('arm,blocks', [('late_blocks', 4), ('deep_blocks', 8), ('soft_targets', 4), ('multi_windows', 4)])
+@pytest.mark.parametrize('arm,blocks', [('late_blocks', 4), ('deep_blocks', 8), ('soft_targets', 4),
+                                      ('multi_windows', 4), ('all_windows', 4)])
 def test_heldout_changes_cannot_change_fitted_weights_and_safe_load(tmp_path, arm, blocks):
     pixels, presence, labels = examples()
     torch.manual_seed(32)
@@ -101,7 +102,8 @@ def test_heldout_changes_cannot_change_fitted_weights_and_safe_load(tmp_path, ar
         encoder.load_state_dict(encoder_state)
         torch.manual_seed(finetune.SEED)
         return finetune.MRIModel(encoder, arm)
-    table = (finetune.multi_window_indices(labels.index) if arm == 'multi_windows'
+    table = (finetune.all_window_indices(labels.index) if arm == 'all_windows' else
+             finetune.multi_window_indices(labels.index) if arm == 'multi_windows'
              else finetune.window_indices(labels.index))
     model, record = finetune.train_fold(factory, arm, pixels, presence, labels, np.arange(9), table, 0)
     changed_pixels, changed_labels = pixels.copy(), labels.copy()
@@ -256,7 +258,7 @@ def test_probe_restores_rng_does_not_seed_real_fits_and_records_excluded_trainin
 
 
 @pytest.mark.parametrize('arms', [None, ('late_blocks', 'deep_blocks'), ('late_blocks', 'soft_targets'),
-                                  ('late_blocks', 'multi_windows')])
+                                  ('late_blocks', 'multi_windows'), ('multi_windows', 'all_windows')])
 def test_complete_two_arm_run_binds_schedule_ids_oof_and_checkpoints(tmp_path, monkeypatch, arms):
     import json
     import transformers
@@ -305,14 +307,21 @@ def test_complete_two_arm_run_binds_schedule_ids_oof_and_checkpoints(tmp_path, m
     assert list(summary['arms']) == list(expected_arms)
     assert summary['selected_arms'] == list(expected_arms)
     assert summary['probe']['selected_arms'] == list(expected_arms)
-    assert summary['recipe']['trainable_blocks_by_arm'] == {arm: {'frozen': 0, 'late_blocks': 2, 'deep_blocks': 6, 'soft_targets': 2, 'multi_windows': 2}[arm]
+    assert summary['recipe']['trainable_blocks_by_arm'] == {arm: {'frozen': 0, 'late_blocks': 2, 'deep_blocks': 6, 'soft_targets': 2, 'multi_windows': 2, 'all_windows': 2}[arm]
                                                           for arm in expected_arms}
     bound_ids = pd.read_csv(output / 'window_study_ids.csv')[ID_COLUMN].tolist()
     np.testing.assert_array_equal(np.load(output / 'window_indices.npy'), finetune.window_indices(bound_ids))
     if 'multi_windows' in expected_arms:
         np.testing.assert_array_equal(np.load(output / 'multi_window_indices.npy'), finetune.multi_window_indices(bound_ids))
         assert summary['multi_window_indices_sha256'] == sha256(output / 'multi_window_indices.npy')
-    assert summary['recipe']['train_windows_per_plane'] == {arm: 3 if arm == 'multi_windows' else 1 for arm in expected_arms}
+    if 'all_windows' in expected_arms:
+        table = np.load(output / 'all_window_indices.npy')
+        np.testing.assert_array_equal(table, np.tile(np.arange(10, dtype=np.uint8), (6, 60, 3, 1)))
+        assert summary['all_window_indices_sha256'] == sha256(output / 'all_window_indices.npy')
+        assert summary['probe']['steps_per_arm'] == 64
+        assert summary['probe']['memory_by_arm']['all_windows']['full_plane_batch_size'] == 8
+    counts = {arm: 10 if arm == 'all_windows' else 3 if arm == 'multi_windows' else 1 for arm in expected_arms}
+    assert summary['recipe']['train_windows_per_plane'] == counts
     for arm in expected_arms:
         oof = pd.read_csv(output / arm / 'oof.csv')
         assert oof[ID_COLUMN].tolist() == labels.index[:58].tolist()
@@ -326,7 +335,7 @@ def test_complete_two_arm_run_binds_schedule_ids_oof_and_checkpoints(tmp_path, m
         assert submission[ID_COLUMN].tolist() == ['test-a', 'test-b']
         assert len(summary['arms'][arm]['final_fit']['epoch_training_loss']) == 6
         for fit in summary['arms'][arm]['folds'] + [summary['arms'][arm]['final_fit']]:
-            assert fit['encoder_adaptation']['trainable_blocks'] == {'frozen': 0, 'late_blocks': 2, 'deep_blocks': 6, 'soft_targets': 2, 'multi_windows': 2}[arm]
+            assert fit['encoder_adaptation']['trainable_blocks'] == {'frozen': 0, 'late_blocks': 2, 'deep_blocks': 6, 'soft_targets': 2, 'multi_windows': 2, 'all_windows': 2}[arm]
             assert fit['encoder_adaptation']['encoder_blocks'] == 8
             import hashlib
             mode = 'public_scores' if arm == 'soft_targets' else 'binary'
@@ -336,7 +345,8 @@ def test_complete_two_arm_run_binds_schedule_ids_oof_and_checkpoints(tmp_path, m
             assert fit['weights_sha256'] == hashlib.sha256(weights.astype('<f4').tobytes()).hexdigest()
             schedule = summary['window_schedule_by_arm'][arm]
             table = np.load(output / schedule['artifact'])
-            assert fit['train_windows_per_plane'] == (3 if arm == 'multi_windows' else 1)
+            assert fit['train_windows_per_plane'] == counts[arm]
+            assert fit['artifact'] == schedule['artifact']
             assert fit['window_schedule_sha256'] == hashlib.sha256(table.tobytes()).hexdigest()
             assert summary['probe']['window_schedule_by_arm'][arm] == schedule
         assert summary['artifact_sha256'][arm + '/model.pt'] == sha256(output / arm / 'model.pt')
@@ -503,9 +513,35 @@ def test_multi_window_schedule_preserves_anchor_unique_sorted_and_rng():
         finetune.multi_window_indices(['a', 'a'])
 
 
+def test_all_window_schedule_covers_every_slot_and_rejects_invalid_tables():
+    np.random.seed(73)
+    expected_random = np.random.random(4)
+    np.random.seed(73)
+    before = torch.random.get_rng_state().clone()
+    table = finetune.all_window_indices(['a', 'b', 'c'])
+    np.testing.assert_array_equal(np.random.random(4), expected_random)
+    assert torch.equal(before, torch.random.get_rng_state())
+    assert table.shape == (6, 3, 3, 10) and table.dtype == np.uint8
+    np.testing.assert_array_equal(table, np.tile(np.arange(10, dtype=np.uint8), (6, 3, 3, 1)))
+    np.testing.assert_array_equal(table[:, [2, 0]], finetune.all_window_indices(['c', 'a']))
+    assert finetune.arm_window_schedule({'all_windows': table}, 'all_windows', 3) is table
+    assert finetune.window_schedule_provenance(table, 'all_windows')['artifact'] == 'all_window_indices.npy'
+    with pytest.raises(ValueError, match='unique'):
+        finetune.all_window_indices(['a', 'a'])
+    duplicates = table.copy()
+    duplicates[0, 0, 0, -1] = 0
+    out_of_range = table.copy()
+    out_of_range[0, 0, 0, -1] = 10
+    for invalid in (table[..., :3], table.astype(float), table[:5], duplicates, out_of_range, table[..., ::-1]):
+        with pytest.raises(ValueError, match='schedule'):
+            finetune.arm_window_schedule(invalid, 'all_windows', 3)
+
+
 @pytest.mark.parametrize('windows', [np.zeros((1, 3), float), np.zeros((1, 3, 3), float),
                                     np.zeros((1, 3, 3), int), np.full((1, 3), 10),
-                                    np.full((1, 3), -1), np.zeros((1, 3, 2), int)])
+                                    np.full((1, 3), -1), np.zeros((1, 3, 2), int),
+                                    np.zeros((1, 3, 10), int), np.tile(np.arange(10.), (1, 3, 1)),
+                                    np.tile(np.arange(1, 11), (1, 3, 1))])
 def test_malformed_window_indices_fail_before_encoding(windows):
     pixels, presence, _ = examples()
     model = finetune.MRIModel(SmallEncoder(), 'late_blocks')
@@ -513,17 +549,18 @@ def test_malformed_window_indices_fail_before_encoding(windows):
         model(pixels[:1], presence[:1], windows)
 
 
-def test_multi_windows_keep_slot_identity_gradients_across_chunks_and_inference():
+@pytest.mark.parametrize('arm', ['multi_windows', 'all_windows'])
+def test_multi_windows_keep_slot_identity_gradients_across_chunks_and_inference(arm):
     transformers = pytest.importorskip('transformers')
     torch.manual_seed(16)
     encoder = transformers.Dinov2Model(transformers.Dinov2Config(
         hidden_size=384, num_hidden_layers=3, num_attention_heads=6,
         mlp_ratio=1, image_size=28, patch_size=14))
-    model = finetune.MRIModel(encoder, 'multi_windows').eval()
+    model = finetune.MRIModel(encoder, arm).eval()
     pixels = np.random.default_rng(17).integers(0, 256, (4, 3, 12, 28, 28), dtype=np.uint8)
     presence = np.ones((4, 3), np.uint8)
-    presence[-1, 1:] = 0  # 30 active windows cross the chunk boundary of 24.
-    windows = np.tile(np.array([1, 4, 8]), (4, 3, 1))
+    presence[-1, 1:] = 0  # Both arms cross the encoder chunk boundary of 24.
+    windows = np.tile(np.arange(10) if arm == 'all_windows' else np.array([1, 4, 8]), (4, 3, 1))
     tokens_by_chunk = []
     def retain_tokens(module, args, output):
         output.last_hidden_state.retain_grad()
@@ -532,12 +569,12 @@ def test_multi_windows_keep_slot_identity_gradients_across_chunks_and_inference(
     logits = model(pixels, presence, windows)
     logits.square().mean().backward()
     handle.remove()
-    assert [len(tokens) for tokens in tokens_by_chunk] == [24, 6]
+    assert [len(tokens) for tokens in tokens_by_chunk] == ([24, 24, 24, 24, 4] if arm == 'all_windows' else [24, 6])
     assert all(torch.all(tokens.grad.abs().sum((1, 2)) > 0) for tokens in tokens_by_chunk)
     assert all(p.grad is None for p in encoder.encoder.layer[0].parameters())
     assert any(p.grad is not None and p.grad.abs().sum() > 0 for p in encoder.encoder.layer[-1].parameters())
     slots = model.head.slot_emb.grad.abs().sum(1).nonzero().flatten().tolist()
-    assert slots == [1, 4, 8, 11, 14, 18, 21, 24, 28]
+    assert slots == (list(range(30)) if arm == 'all_windows' else [1, 4, 8, 11, 14, 18, 21, 24, 28])
     with torch.no_grad():
         expected = model(pixels, presence, windows)
         pixels[-1, 1:] = 255
@@ -545,9 +582,12 @@ def test_multi_windows_keep_slot_identity_gradients_across_chunks_and_inference(
         control = finetune.MRIModel(encoder, 'late_blocks').eval()
         control.load_state_dict(model.state_dict())
         torch.testing.assert_close(model(pixels, presence), control(pixels, presence), rtol=0, atol=0)
+        if arm == 'all_windows':
+            torch.testing.assert_close(model(pixels, presence, windows), control(pixels, presence), rtol=0, atol=0)
 
 
-def test_multi_window_training_and_probe_route_distinct_schedules(monkeypatch):
+@pytest.mark.parametrize('candidate', ['multi_windows', 'all_windows'])
+def test_multi_window_training_and_probe_route_distinct_schedules(monkeypatch, candidate):
     import hashlib
     pixels, presence, labels = examples()
     extra = labels.iloc[:3].copy()
@@ -557,8 +597,10 @@ def test_multi_window_training_and_probe_route_distinct_schedules(monkeypatch):
     pixels = np.concatenate([pixels, pixels[:3]])
     presence = np.ones((12, 3), np.uint8)
     presence[3, 2] = 0
-    tables = {'late_blocks': finetune.window_indices(labels.index),
-              'multi_windows': finetune.multi_window_indices(labels.index)}
+    control = 'multi_windows' if candidate == 'all_windows' else 'late_blocks'
+    tables = {control: finetune.multi_window_indices(labels.index) if control == 'multi_windows' else finetune.window_indices(labels.index),
+              candidate: finetune.all_window_indices(labels.index) if candidate == 'all_windows' else finetune.multi_window_indices(labels.index)}
+    count = 10 if candidate == 'all_windows' else 3
     calls = []
     original = finetune.training_step
     def capture(model, optimizer, scaler, pixels, presence, targets, weights, windows):
@@ -568,24 +610,26 @@ def test_multi_window_training_and_probe_route_distinct_schedules(monkeypatch):
     monkeypatch.setattr(finetune, 'PROBE_STEPS', 1)
     factory = lambda arm: finetune.MRIModel(SmallEncoder(), arm)
     probe = finetune.throughput_probe(factory, pixels, presence, labels, np.arange(12), tables, 0,
-                                     arms=('late_blocks', 'multi_windows'))
-    assert [call[1].shape for call in calls] == [(8, 3), (8, 3, 3)]
+                                     arms=(control, candidate))
+    assert [call[1].shape for call in calls] == [(8, 3, 3) if control == 'multi_windows' else (8, 3), (8, 3, count)]
     assert np.all(calls[1][2] == 1)
-    assert probe['memory_by_arm']['multi_windows']['peak_allocated_bytes'] is None
-    assert probe['memory_by_arm']['multi_windows']['full_plane_batch_size'] == 8
-    assert len(probe['probe_sampled_ids_by_arm']['multi_windows']) == 8
-    assert set(probe['probe_sampled_ids_by_arm']['multi_windows']) == {f'study-{i}' for i in range(4, 12)}
+    assert probe['memory_by_arm'][candidate]['peak_allocated_bytes'] is None
+    assert probe['memory_by_arm'][candidate]['full_plane_batch_size'] == 8
+    assert len(probe['probe_sampled_ids_by_arm'][candidate]) == 8
+    assert set(probe['probe_sampled_ids_by_arm'][candidate]) == {f'study-{i}' for i in range(4, 12)}
+    if candidate == 'all_windows':
+        np.testing.assert_array_equal(calls[1][1], np.tile(np.arange(10), (8, 3, 1)))
     for arm in tables:
         assert probe['window_schedule_by_arm'][arm]['window_schedule_sha256'] == hashlib.sha256(tables[arm].tobytes()).hexdigest()
     calls.clear()
-    _, record = finetune.train_fold(factory, 'multi_windows', pixels, presence, labels, np.arange(12), tables, 0)
+    _, record = finetune.train_fold(factory, candidate, pixels, presence, labels, np.arange(12), tables, 0)
     assert len(calls) == 12
-    assert [windows.shape for _, windows, _ in calls] == [(8, 3, 3), (1, 3, 3)] * 6
-    assert record['train_windows_per_plane'] == 3
-    assert record['window_schedule_sha256'] == hashlib.sha256(tables['multi_windows'].tobytes()).hexdigest()
+    assert [windows.shape for _, windows, _ in calls] == [(8, 3, count), (1, 3, count)] * 6
+    assert record['train_windows_per_plane'] == count
+    assert record['window_schedule_sha256'] == hashlib.sha256(tables[candidate].tobytes()).hexdigest()
     with pytest.raises(ValueError, match='schedule'):
-        finetune.train_fold(factory, 'multi_windows', pixels, presence, labels, np.arange(12), tables['late_blocks'], 0)
+        finetune.train_fold(factory, candidate, pixels, presence, labels, np.arange(12), tables[control], 0)
     presence[4, 0] = 0
     with pytest.raises(ValueError, match='eight distinct full-plane'):
         finetune.throughput_probe(factory, pixels, presence, labels, np.arange(12), tables, 0,
-                                 arms=('multi_windows',))
+                                 arms=(candidate,))
