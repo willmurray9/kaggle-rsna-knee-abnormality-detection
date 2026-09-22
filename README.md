@@ -2,7 +2,7 @@
 
 A small, explainable starting point for the [Kaggle competition](https://www.kaggle.com/competitions/rsna-knee-abnormality-detection), using the same basic structure as our soil-grain project.
 
-**Status:** our independently trained model's best public AUC is **0.801**, up from **0.780** for one-window encoder adaptation, **0.718** for the frozen image baseline and **0.508** for metadata. Three-window training achieved local AUC **0.77478** on the same 58 explicit-label studies; submission **56341808** completed successfully. The [all-ten-window comparison](docs/all-window-plan.md) scored **0.76965** locally and failed promotion; diagnostic submission **56471807** is awaiting Kaggle scoring. Three-window training remains selected. A separate reproduction of a public competition-trained ensemble scored **0.891**; it has no valid local CV on our folds. See [experiments](docs/experiments.md) and [submission evidence](docs/submissions.md). Final deadline: **October 22, 2026, 23:59 UTC**.
+**Status:** our independently trained model's best public AUC is **0.819** from the [all-ten-window diagnostic](docs/all-window-plan.md), submission **56471807**, up from **0.801** for three-window training, **0.780** for one-window adaptation and **0.718** for the frozen image baseline. Local validation went the other way: **0.76965 versus 0.77478** on the same 58 explicit-label studies, so three-window training remains the locally selected baseline. A separate reproduction of a public competition-trained ensemble scored **0.891**; it has no valid local CV on our folds. See [experiments](docs/experiments.md) and [submission evidence](docs/submissions.md). Final deadline: **October 22, 2026, 23:59 UTC**.
 
 The key challenge is supervision: the current training CSV has **4,407 studies**, but only **58 have the 12 condition labels**. All have reports; test studies do not. Missing labels must stay unknown. See [competition details](docs/competition.md) and the [roadmap](docs/roadmap.md).
 
@@ -40,7 +40,10 @@ reproduced the saved three-window control. Training on all ten windows scored
 **0.76965 versus 0.77478**, improving two folds but lowering the mean by **0.00512**.
 It failed the promotion rule with labels and folds unchanged. The three-window
 model remains selected. Offline inference matched the saved predictions exactly;
-diagnostic submission **56471807** is awaiting Kaggle scoring.
+diagnostic submission **56471807** completed with public AUC **0.819**, our new
+independent public best (**+0.018**). This public gain does not change the frozen
+local selection decision; the disagreement highlights the limits of our small
+validation set.
 
 ## Start here
 

@@ -61,6 +61,9 @@ AUC **0.801**. Selection was frozen at **18:35:16 UTC**, before submission or
 public feedback. The requested one-time ten-window submission is diagnostic.
 Private offline inference completed in **16.556 seconds** and reproduced the
 three visible examples exactly; checkpoint, source, schedule, metadata and
-probability checks passed. Submission **56471807** is awaiting Kaggle scoring.
+probability checks passed. Submission **56471807** completed with public AUC
+**0.819**, confirmed at **19:10:45 UTC**: our new independent public best,
+**+0.018** over 0.801. The frozen local selection decision remains unchanged;
+public improvement is recorded separately from failed local promotion.
 See [experiments](experiments.md) for target results and
 [submission evidence](submissions.md) for execution details.

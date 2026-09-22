@@ -52,8 +52,10 @@ bootstrap interval for the difference was **[−0.030818, +0.017147]**. Labels,
 folds and architecture stayed fixed. The 2.79-hour comparison fit the compute
 budget. Three-window training remains selected at **0.801** public AUC. A
 requested diagnostic submission of the ten-window model passed exact offline
-prediction parity; submission **56471807** is awaiting Kaggle scoring. See
-[the plan and outcome](all-window-plan.md).
+prediction parity; submission **56471807** completed with public AUC **0.819**,
+our new independent public best (**+0.018**). The local selection decision remains
+unchanged; the disagreement warrants stronger validation rather than tuning to
+this leaderboard result. See [the plan and outcome](all-window-plan.md).
 
 ## 1. Working foundation — complete
 

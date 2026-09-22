@@ -1,6 +1,6 @@
 # Submission log
 
-Our best independently trained submission is **0.801** (ref **56341808**), up from **0.780** for one-window adaptation, **0.718** for the frozen image model and **0.508** for metadata. Five submissions are complete; the all-ten-window diagnostic submission **56471807** is awaiting scoring. A separate reproduction of an externally trained image ensemble scored **0.891** (ref **56286555**).
+Our best independently trained submission is **0.819** (ref **56471807**), up from **0.801** for three-window training, **0.780** for one-window adaptation, **0.718** for the frozen image model and **0.508** for metadata. All six submissions are complete. Three-window training remains the locally selected baseline because the ten-window diagnostic failed its local promotion rule. A separate reproduction of an externally trained image ensemble scored **0.891** (ref **56286555**).
 
 This competition executes a notebook against hidden test data. Local example CSV validation is only a format check. Record actual submissions here when they happen.
 
@@ -11,7 +11,7 @@ This competition executes a notebook against hidden test data. Local example CSV
 | 2026-09-16 20:37:58 | [RSNA Knee Independent Image](https://www.kaggle.com/code/willmurray99/rsna-knee-independent-image), version **1**; ref **56287107** | `3b79c70` + recorded source snapshots/hashes | Versioned build, model and inference manifests | Quarter-weight report supervision selected on corrected frozen folds; PCA-32 rejected; offline parity verified | **0.718**, COMPLETE | Successful hidden-test result, +0.210 over metadata; retain as independent image baseline. |
 | 2026-09-17 00:50:24 | [RSNA Knee Adapted Image](https://www.kaggle.com/code/willmurray99/rsna-knee-adapted-image), version **1**; ref **56290319** | `3b79c70` + exact working-tree training/inference source hashes | Versioned training, build, selection and parity manifests | Highest eligible local mean AUC **0.759911**; improves all three folds over original and matched frozen control; exact offline parity | **0.780**, COMPLETE | New independently trained best, **+0.062** over 0.718; no recipe changes from leaderboard feedback. |
 | 2026-09-18 22:04:43 | [RSNA Knee Multi Window Image](https://www.kaggle.com/code/willmurray99/rsna-knee-multi-window-image), version **1**; ref **56341808** | `2f4daefd1cc0baddf08807867edbd5dd346df2e5` | Full hashes below | Local AUC **0.774776**, all three folds improve over exactly reproduced one-window control; exact offline parity | **0.801**, COMPLETE | Independent best, **+0.021** over 0.780. |
-| 2026-09-22 18:38:27 | [RSNA Knee All Window Image](https://www.kaggle.com/code/willmurray99/rsna-knee-all-window-image), version **1**; ref **56471807** | `ec3b6867c8be8b081ba8215054450fe794585c82` | Full hashes below | User-requested diagnostic; local **0.769655** fails promotion versus **0.774776**; exact offline parity | Pending | Retain three-window baseline; decision frozen before public feedback. |
+| 2026-09-22 18:38:27 | [RSNA Knee All Window Image](https://www.kaggle.com/code/willmurray99/rsna-knee-all-window-image), version **1**; ref **56471807** | `ec3b6867c8be8b081ba8215054450fe794585c82` | Full hashes below | User-requested diagnostic; local **0.769655** fails promotion versus **0.774776**; exact offline parity | **0.819**, COMPLETE | New independent public best, **+0.018**; retain three-window locally selected baseline and the decision frozen before public feedback. |
 
 Keep training/weight/config hashes with each run; record the generated CSV hash where available. Preserve the local validation result before viewing the leaderboard score.
 
@@ -234,6 +234,14 @@ the visible three rows only. Source validation passed **336 local tests** and
 **335 Linux CI tests**, with one expected optional integration skip in CI.
 
 Kaggle accepted submission **56471807**, requested at **18:38:27 UTC** on
-September 22. Authenticated status at **18:38:34 UTC** was **PENDING**, without
-an error description or public score. Scoring is still pending; the selected
-three-window baseline and independent public best **0.801** remain unchanged.
+September 22. The authenticated API confirmed **COMPLETE**, public AUC **0.819**,
+with no error description, at **19:10:45 UTC**. `scoring_result.json` preserves
+the response. This is our new independent public best, **+0.018** over 0.801.
+The approximately 32-minute interval includes queueing and does not measure
+hidden inference alone.
+
+The public gain and local decrease are both retained in the record. The three-window
+model remains the locally selected baseline under the frozen rule; its public
+score is still 0.801. The ten-window candidate is now the best independent public
+submission, without retroactively changing local promotion or tuning another
+recipe from this result.

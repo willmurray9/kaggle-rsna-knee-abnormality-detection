@@ -13,6 +13,7 @@ Keep one row per hypothesis. Detailed outputs live under `artifacts/experiments/
 | 2026-09-16 | coverage-attention-v1 | A small learned diagnosis-specific aggregator of the same frozen window cache may outperform fixed mean pooling and linear heads. Fixed six epochs, 128 hidden units, dropout 0.2, AdamW LR 0.001/weight decay 0.02, batch eight, seed 20260916; silver weight 0.25. | Mean AUC **0.707859**, delta **+0.010047** versus original; **−0.004235** versus coverage mean | Passes original-reference rule but does not improve on mean coverage; retain as a completed comparison. No epoch or hyperparameter search followed. |
 | 2026-09-16 | coverage-adaptation-v1 | Compare frozen versus final-two-block DINOv2 adaptation on identical uint8 pixels and deterministic sampled training windows. Same attention head, six epochs, batch eight, AdamW head LR 0.001/backbone LR 0.000008, decay 0.02, silver weight 0.25; all windows at inference. | Frozen control **0.697164**; adapted **0.759911**. Adaptation improves all three folds versus both control and original; complete job 1,832.16 seconds | Adapted final refit selected before leaderboard feedback. Exact offline parity passed; submission **56290319 COMPLETE**, public AUC **0.780**, new independent best. |
 | 2026-09-17 | depth-adaptation-v1 | Train final six versus two DINOv2 blocks; keep labels, saved folds, pixels, head, six epochs, optimizer and sampling fixed. Rerun the two-block control and compare against the saved reference. | Two-block control **0.759911**, exactly reproducing saved predictions; six-block candidate **0.748275**, delta **−0.011635**, one of three folds improves; complete job 2,258.52 seconds | Rejected by the preregistered rule. Retain independent public best **0.780**; no new submission or per-target blend. |
+| 2026-09-22 | all-window-v1 | Train on all ten versus three windows per plane with unchanged labels, folds, architecture and six-epoch recipe. | Three-window control exactly reproduced **0.774776**; ten windows **0.769655**, delta **−0.005122**, two folds improve; 2.79-hour comparison | Local promotion failed; three-window baseline retained. Requested diagnostic submission **56471807 COMPLETE**, public **0.819**, new independent public best **+0.018**. No leaderboard-driven retuning. |
 
 The independent improvement pass is specified in
 [its plan](independent-improvement-plan.md). The separate 120-report rules pilot
@@ -646,8 +647,13 @@ The selected baseline remains the saved three-window model: local AUC
 **diagnostic**. Selection was frozen at **18:35:16 UTC** before public feedback.
 Private offline inference passed checkpoint/source/schedule/metadata validation
 and exact visible-example prediction parity in **16.556 seconds**. Submission
-**56471807** is awaiting Kaggle scoring; no ten-window public result is recorded
-yet. See [submission evidence](submissions.md). Local evidence is under
+**56471807** completed with public AUC **0.819**, confirmed at **19:10:45 UTC**,
+our new independent public best (**+0.018** over 0.801). The local promotion
+decision remains unchanged. Opposite local and public differences highlight the
+limits of 58 reused gold cases; this result does not establish which validation
+or distribution factors caused the disagreement. No further candidate or
+per-target blend was tuned from the leaderboard score. See
+[submission evidence](submissions.md). Local evidence is under
 `artifacts/reports/all-window-v1/`, including `comparison/comparison.json` and
 `independent_outcome_verification.json`; training outputs are in
 `artifacts/kaggle/all-window-training/versions/v1/output/adaptation/`.
