@@ -657,3 +657,19 @@ per-target blend was tuned from the leaderboard score. See
 `artifacts/reports/all-window-v1/`, including `comparison/comparison.json` and
 `independent_outcome_verification.json`; training outputs are in
 `artifacts/kaggle/all-window-training/versions/v1/output/adaptation/`.
+
+## September 22 public-reference blend — preregistered
+
+Shift the primary submission baseline to the public **0.891** ensemble. Test one
+fixed **90% public / 10% independent all-window** blend after targetwise average-tie
+percentile ranking over the complete current test set. The independent parent
+scored **0.819**. Weights are identical across targets; no training, new labels,
+coefficient search or preprocessing change. The hypothesis is complementary model
+errors, not a claim that the weaker model must help.
+
+There is no valid local CV for the public ensemble or blend on our existing gold
+studies. Require both unchanged inference branches to pass provenance and visible
+prediction parity, independently verify blend arithmetic, then make one technical
+pass-gated submission. A score above 0.891 is a provisional public best; equal or
+lower retains the pure reference. Record the outcome without repeated leaderboard
+tuning. See [the fixed recipe and execution gates](reference-blend-plan.md).
