@@ -657,3 +657,103 @@ per-target blend was tuned from the leaderboard score. See
 `artifacts/reports/all-window-v1/`, including `comparison/comparison.json` and
 `independent_outcome_verification.json`; training outputs are in
 `artifacts/kaggle/all-window-training/versions/v1/output/adaptation/`.
+
+## September 22 public-reference blend — preregistered
+
+Shift the primary submission baseline to the public **0.891** ensemble. Test one
+fixed **90% public / 10% independent all-window** blend after targetwise average-tie
+percentile ranking over the complete current test set. The independent parent
+scored **0.819**. Weights are identical across targets; no training, new labels,
+coefficient search or preprocessing change. The hypothesis is complementary model
+errors, not a claim that the weaker model must help.
+
+There is no valid local CV for the public ensemble or blend on our existing gold
+studies. Require both unchanged inference branches to pass provenance and visible
+prediction parity, independently verify blend arithmetic, then make one technical
+pass-gated submission. A score above 0.891 is a provisional public best; equal or
+lower retains the pure reference. Record the outcome without repeated leaderboard
+tuning. See [the fixed recipe and execution gates](reference-blend-plan.md).
+
+### Fixed blend implementation and launch
+
+Clean, pushed source `167eeefff68db2e003743de60e5f51a3e72e7010` packages the
+two scored inference notebooks in sequential, isolated Python processes. It pins
+both original notebooks, all twenty public checkpoint hashes and ten-window
+counts, and the independent model, training summary and schedule. Test IDs come
+from the current competition mount; ranks span the complete current test set.
+The root candidate CSV is written only after both complete components pass
+provenance and probability checks. Private T4 execution has internet disabled
+and a shared eight-hour deadline; the existing public memory guard remains active.
+
+Prelaunch verification passed **378 local tests**, Linux CI and independent code
+review. Tests include 1,300 replacement IDs, ties, shuffled components, invalid
+outputs, missing members, altered checkpoints/source, branch failures and timeout.
+The independently implemented output verifier was frozen before hosted execution;
+its valid fixture passed and all 25 corrupted fixtures were rejected. Review
+added five more rejected cases and an independent ranking oracle that matched
+exactly through 1,300 studies.
+
+Launch evidence was frozen at **19:47:03 UTC** on September 22. Private notebook
+`willmurray99/rsna-knee-reference-blend`, version 1, was pushed once but stalled
+before technical verification and was not submitted. Its evidence is preserved
+under `artifacts/reports/reference-blend-v1/` and
+`artifacts/kaggle/reference-blend/versions/v1/`.
+
+### Private execution recovery — September 22
+
+Version 1 remained RUNNING without an error while its live log stayed at two
+completed public members (session time 48.996 seconds, 262,324 logged bytes)
+across checks more than fifteen minutes apart. No blend or leaderboard result
+was available. Verbose subprocess output blocking in notebook file-descriptor
+capture is a plausible cause, consistent with an [upstream ipykernel issue](https://github.com/ipython/ipykernel/issues/847);
+the hosted evidence does not establish the cause conclusively.
+
+The sole recovery change sends each subprocess's stdout and stderr directly to
+its own exclusive `execution.log`, preserving logs on failure or timeout and
+printing only a compact completion message after verification. Both parent
+notebooks, their weights and preprocessing, rank arithmetic, the 90/10 recipe
+and shared eight-hour deadline are unchanged. All **379 local tests** pass.
+Independent review also verified completion with the parent's output pipes left
+undrained while eight MiB of child output was preserved in regular files.
+The repair is clean, pushed source
+`5a1d9fd77c4d63ab9741c259767db78bdd9cec25`, with passing Linux CI. Version 2
+completed the three visible studies in **95.585 seconds**: **80.493 seconds** for
+the public branch and **14.960 seconds** for the independent branch. All twenty
+public checkpoints were verified, and both parent outputs matched their saved
+predictions exactly. The
+independent verifier checked five blend modules, twelve independent modules,
+original notebooks, runner code, checkpoint/metadata evidence and preserved logs;
+the final blend matched both independent arithmetic and the frozen example
+CSV exactly. Successful replay supports the output-capture explanation but does
+not establish the stalled version's platform cause conclusively.
+
+The public API requires a session ID for cancellation but does not provide a
+supported way to resolve it from this notebook. No cancellation was attempted
+with a guessed ID. Version 1 was last observed RUNNING; after the latest version
+advanced, its terminal state remained unresolved. Its eight-hour wrapper timeout
+is unchanged, within the nine-hour competition limit. We do not claim a confirmed
+private-platform termination time. The [API limitation](https://github.com/Kaggle/kaggle-cli/issues/1169)
+and [concurrent-session behavior](https://www.kaggle.com/docs/efficient-gpu-usage)
+are documented separately from the successful version 2 result.
+
+The technical submission decision was frozen at **20:34:27 UTC** on September 22;
+Kaggle accepted the single planned submission, **56473633**, using version **2**.
+This is the same fixed model candidate after an execution repair; no leaderboard
+feedback changed the recipe. Version 2 evidence is under
+`artifacts/reports/reference-blend-v2/` and
+`artifacts/kaggle/reference-blend/versions/v2/`.
+
+### Fixed blend outcome — pure public ensemble retained
+
+The authenticated API first confirmed **COMPLETE**, public AUC **0.889**, with
+no error at **17:15:06 UTC on September 23**. This is **0.002 below** the pure
+public ensemble's 0.891, so the preregistered decision retains that ensemble as
+the primary submission baseline. The independent public best remains **0.819**
+and the independent local baseline **0.77478**. No coefficient search or
+additional candidate was selected from this result.
+
+This single public-test observation does not establish statistical significance
+or that other combinations cannot help. The blend has no valid local CV on our
+58 gold studies. `status-refresh.json` and `scoring_result.json` preserve the
+authenticated response and first observation time; the gap since the submission
+request does not measure actual completion time or hidden inference duration.
