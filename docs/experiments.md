@@ -674,7 +674,7 @@ pass-gated submission. A score above 0.891 is a provisional public best; equal o
 lower retains the pure reference. Record the outcome without repeated leaderboard
 tuning. See [the fixed recipe and execution gates](reference-blend-plan.md).
 
-### Fixed blend implementation and launch — outcome pending
+### Fixed blend implementation and launch
 
 Clean, pushed source `167eeefff68db2e003743de60e5f51a3e72e7010` packages the
 two scored inference notebooks in sequential, isolated Python processes. It pins
@@ -719,7 +719,8 @@ The repair is clean, pushed source
 `5a1d9fd77c4d63ab9741c259767db78bdd9cec25`, with passing Linux CI. Version 2
 completed the three visible studies in **95.585 seconds**: **80.493 seconds** for
 the public branch and **14.960 seconds** for the independent branch. All twenty
-public members and both unchanged parent predictions reproduced exactly. The
+public checkpoints were verified, and both parent outputs matched their saved
+predictions exactly. The
 independent verifier checked five blend modules, twelve independent modules,
 original notebooks, runner code, checkpoint/metadata evidence and preserved logs;
 the final blend matched both independent arithmetic and the frozen example
@@ -735,10 +736,24 @@ private-platform termination time. The [API limitation](https://github.com/Kaggl
 and [concurrent-session behavior](https://www.kaggle.com/docs/efficient-gpu-usage)
 are documented separately from the successful version 2 result.
 
-The technical submission decision was frozen at **20:34:27 UTC**; Kaggle accepted
-the single planned submission, **56473633**, using version **2**. Hidden scoring
-is pending. This is the same fixed model candidate after an execution repair;
-no leaderboard feedback changed the recipe. The primary public baseline remains
-0.891, the independent public best 0.819 and the independent local baseline
-0.77478. Version 2 evidence is under `artifacts/reports/reference-blend-v2/` and
+The technical submission decision was frozen at **20:34:27 UTC** on September 22;
+Kaggle accepted the single planned submission, **56473633**, using version **2**.
+This is the same fixed model candidate after an execution repair; no leaderboard
+feedback changed the recipe. Version 2 evidence is under
+`artifacts/reports/reference-blend-v2/` and
 `artifacts/kaggle/reference-blend/versions/v2/`.
+
+### Fixed blend outcome — pure public ensemble retained
+
+The authenticated API first confirmed **COMPLETE**, public AUC **0.889**, with
+no error at **17:15:06 UTC on September 23**. This is **0.002 below** the pure
+public ensemble's 0.891, so the preregistered decision retains that ensemble as
+the primary submission baseline. The independent public best remains **0.819**
+and the independent local baseline **0.77478**. No coefficient search or
+additional candidate was selected from this result.
+
+This single public-test observation does not establish statistical significance
+or that other combinations cannot help. The blend has no valid local CV on our
+58 gold studies. `status-refresh.json` and `scoring_result.json` preserve the
+authenticated response and first observation time; the gap since the submission
+request does not measure actual completion time or hidden inference duration.

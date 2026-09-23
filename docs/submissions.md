@@ -1,6 +1,6 @@
 # Submission log
 
-The reproduced public ensemble's **0.891** (ref **56286555**) is our primary submission baseline and best scored submission. Our best independently trained submission is **0.819** (ref **56471807**), up from **0.801** for three-window training, **0.780** for one-window adaptation, **0.718** for the frozen image model and **0.508** for metadata. Six submissions are complete. The fixed 90/10 public/independent rank blend passed exact component parity and independent arithmetic checks and was submitted as **56473633**, with hidden scoring pending. Three-window training remains the locally selected independent baseline because the ten-window diagnostic failed its local promotion rule.
+The reproduced public ensemble's **0.891** (ref **56286555**) remains our primary submission baseline and best scored submission. The fixed 90/10 rank blend scored **0.889** (ref **56473633**), so it does not replace the pure ensemble. Our best independently trained submission remains **0.819** (ref **56471807**), up from **0.801** for three-window training, **0.780** for one-window adaptation, **0.718** for the frozen image model and **0.508** for metadata. All seven submissions are complete. Three-window training remains the locally selected independent baseline because the ten-window diagnostic failed its local promotion rule.
 
 This competition executes a notebook against hidden test data. Local example CSV validation is only a format check. Record actual submissions here when they happen.
 
@@ -12,7 +12,7 @@ This competition executes a notebook against hidden test data. Local example CSV
 | 2026-09-17 00:50:24 | [RSNA Knee Adapted Image](https://www.kaggle.com/code/willmurray99/rsna-knee-adapted-image), version **1**; ref **56290319** | `3b79c70` + exact working-tree training/inference source hashes | Versioned training, build, selection and parity manifests | Highest eligible local mean AUC **0.759911**; improves all three folds over original and matched frozen control; exact offline parity | **0.780**, COMPLETE | New independently trained best, **+0.062** over 0.718; no recipe changes from leaderboard feedback. |
 | 2026-09-18 22:04:43 | [RSNA Knee Multi Window Image](https://www.kaggle.com/code/willmurray99/rsna-knee-multi-window-image), version **1**; ref **56341808** | `2f4daefd1cc0baddf08807867edbd5dd346df2e5` | Full hashes below | Local AUC **0.774776**, all three folds improve over exactly reproduced one-window control; exact offline parity | **0.801**, COMPLETE | Independent best, **+0.021** over 0.780. |
 | 2026-09-22 18:38:27 | [RSNA Knee All Window Image](https://www.kaggle.com/code/willmurray99/rsna-knee-all-window-image), version **1**; ref **56471807** | `ec3b6867c8be8b081ba8215054450fe794585c82` | Full hashes below | User-requested diagnostic; local **0.769655** fails promotion versus **0.774776**; exact offline parity | **0.819**, COMPLETE | New independent public best, **+0.018**; retain three-window locally selected baseline and the decision frozen before public feedback. |
-| 2026-09-22 20:34:27 | [RSNA Knee Reference Blend](https://www.kaggle.com/code/willmurray99/rsna-knee-reference-blend), version **2**; ref **56473633** | `5a1d9fd77c4d63ab9741c259767db78bdd9cec25` | Full hashes below | Fixed 90/10 targetwise rank blend; both parents reproduce exactly and independent arithmetic matches; no valid local CV | Pending | One preregistered submission; retain 0.891 reference unless the score is strictly higher. |
+| 2026-09-22 20:34:27 | [RSNA Knee Reference Blend](https://www.kaggle.com/code/willmurray99/rsna-knee-reference-blend), version **2**; ref **56473633** | `5a1d9fd77c4d63ab9741c259767db78bdd9cec25` | Full hashes below | Fixed 90/10 targetwise rank blend; both parents reproduce exactly and independent arithmetic matches; no valid local CV | **0.889**, COMPLETE | **0.002 below** the pure reference; retain 0.891 under the registered rule, without coefficient search. |
 
 Keep training/weight/config hashes with each run; record the generated CSV hash where available. Preserve the local validation result before viewing the leaderboard score.
 
@@ -247,7 +247,7 @@ score is still 0.801. The ten-window candidate is now the best independent publi
 submission, without retroactively changing local promotion or tuning another
 recipe from this result.
 
-## Fixed public-reference rank blend — version 2, scoring pending
+## Fixed public-reference rank blend — version 2, complete
 
 The [registered experiment](reference-blend-plan.md) combines **90% public
 ensemble ranks and 10% independent all-ten-window ranks**, using ascending
@@ -280,11 +280,18 @@ test metadata, original runners and source files passed verification.
 | Independent technical verification | `c7316c2ecdd6080b0daee02a62f964e517d2820577117b179e81e361b6606107` |
 
 Kaggle accepted ref **56473633**, requested at **20:34:27 UTC** on September 22,
-after the technical submission decision was frozen. Hidden scoring is pending;
-the example CSV hash and timing concern only the three visible studies. A public
-score strictly above 0.891 will be a provisional new best; equal or lower retains
-the pure public ensemble. No weight search or repeat tuning from leaderboard
-feedback is part of this experiment. The submitted version's launch, parity,
-request and execution evidence is under `artifacts/reports/reference-blend-v2/`
-and `artifacts/kaggle/reference-blend/versions/v2/`; version 1 evidence remains
+after the technical submission decision was frozen. The authenticated API first
+confirmed **COMPLETE**, public AUC **0.889**, with no error description, at
+**17:15:06 UTC on September 23**. This is **0.002 below 0.891**, so the registered
+decision retains the pure public ensemble. No weight search or repeat tuning
+follows this result. It is one public-test observation, without a valid local
+blend CV or a claim of statistical significance.
+
+`status-refresh.json` and `scoring_result.json` preserve that observed response.
+The confirmation timestamp is not the actual completion time; elapsed time since
+the request does not measure hidden inference duration. The example CSV hash and
+95.585-second timing concern only the three visible studies. The submitted
+version's launch, parity, request and scoring evidence is under
+`artifacts/reports/reference-blend-v2/` and
+`artifacts/kaggle/reference-blend/versions/v2/`; version 1 evidence remains
 preserved separately.
