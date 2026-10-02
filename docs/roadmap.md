@@ -72,6 +72,31 @@ observation. The public checkpoints may have seen our 58 gold studies, so this
 blend has no valid local CV. The independent public best remains 0.819, and
 three-window training remains the local baseline for controlled comparisons.
 
+**October 2 review:** the leaderboard top is 0.961, and the strongest *fully public*
+notebooks converge on one 0.943 stack: DINOv2, A5, RadImageNet, Raptor and four
+CoAtNet readers. The [fixed reproduction](public-frontier-plan.md) of that stack
+is the first attempt; it reproduces public work rather than adding our own
+modeling. Ideas beyond it, in priority order:
+
+1. **Train a diverse, competitive model to blend at about 10%.** A public parent
+   reached 0.946 from 0.943 by adding its author's private ConvNeXt ensemble at
+   10%. Our own 10% blend instead lost 0.002 (0.891 to 0.889), because our 0.819
+   model is too weak a partner. Start a 2.5D CNN family (ConvNeXt or EfficientNet)
+   from generic ImageNet weights on our saved folds, with multiple series per
+   study and higher in-plane resolution for the menisci, ACL and fractures. Blend
+   it only after its standalone local CV clearly beats the three-window baseline.
+2. **Improve report supervision.** The host allows hosted-LLM extraction of report
+   labels. Our audits found threshold mismatches and contradictions in the public
+   silver labels. A reviewed multilingual extraction pilot remains untested and
+   would serve both our own models and any future blend partner.
+3. **Make the frontier's failure modes visible.** Its CoAt readers fail open and
+   several inputs are not hash-pinned. Before relying on it for the final
+   selection, re-check example parity whenever its attached datasets change.
+
+Avoid per-target routing or weight searches on the 58 gold studies (the public
+weights may have seen them), and avoid choosing coefficients from repeated
+leaderboard probes.
+
 ## 1. Working foundation — complete
 
 Audit the actual CSVs, preserve missing labels, verify macro AUC and submission format, and produce a constant 0.5 sanity output. AUC 0.5 is expected for constant predictions; it measures neither image understanding nor generalization. The included notebook's hosted execution has now passed.
