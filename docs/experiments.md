@@ -14,6 +14,7 @@ Keep one row per hypothesis. Detailed outputs live under `artifacts/experiments/
 | 2026-09-16 | coverage-adaptation-v1 | Compare frozen versus final-two-block DINOv2 adaptation on identical uint8 pixels and deterministic sampled training windows. Same attention head, six epochs, batch eight, AdamW head LR 0.001/backbone LR 0.000008, decay 0.02, silver weight 0.25; all windows at inference. | Frozen control **0.697164**; adapted **0.759911**. Adaptation improves all three folds versus both control and original; complete job 1,832.16 seconds | Adapted final refit selected before leaderboard feedback. Exact offline parity passed; submission **56290319 COMPLETE**, public AUC **0.780**, new independent best. |
 | 2026-09-17 | depth-adaptation-v1 | Train final six versus two DINOv2 blocks; keep labels, saved folds, pixels, head, six epochs, optimizer and sampling fixed. Rerun the two-block control and compare against the saved reference. | Two-block control **0.759911**, exactly reproducing saved predictions; six-block candidate **0.748275**, delta **−0.011635**, one of three folds improves; complete job 2,258.52 seconds | Rejected by the preregistered rule. Retain independent public best **0.780**; no new submission or per-target blend. |
 | 2026-09-22 | all-window-v1 | Train on all ten versus three windows per plane with unchanged labels, folds, architecture and six-epoch recipe. | Three-window control exactly reproduced **0.774776**; ten windows **0.769655**, delta **−0.005122**, two folds improve; 2.79-hour comparison | Local promotion failed; three-window baseline retained. Requested diagnostic submission **56471807 COMPLETE**, public **0.819**, new independent public best **+0.018**. No leaderboard-driven retuning. |
+| 2026-10-02 | public-frontier-v1 | Reproduce the fully public 0.943 stack (DINOv2, A5, RadImageNet, Raptor, four CoAtNet readers) unchanged as a private offline 2×T4 notebook; source `yamadan96/rsna-knee-d4-public0946` v2. | No valid local CV (competition-trained public weights) | Preregistered; submit once after example-output parity. Above 0.891 becomes the primary baseline and ends today's attempts. |
 
 The independent improvement pass is specified in
 [its plan](independent-improvement-plan.md). The separate 120-report rules pilot
@@ -757,3 +758,13 @@ or that other combinations cannot help. The blend has no valid local CV on our
 58 gold studies. `status-refresh.json` and `scoring_result.json` preserve the
 authenticated response and first observation time; the gap since the submission
 request does not measure actual completion time or hidden inference duration.
+
+## October 2 public frontier reproduction — preregistered
+
+The public leaderboard has moved well past our 0.891 reference: the strongest fully
+public notebooks score 0.943 and the leaderboard top is 0.961. Reproduce that
+public stack unchanged as a private offline notebook. Our own models and the 0.891
+ensemble's members are not retrained or reweighted. The source choice, licenses,
+validation gates and decision rule are fixed in [the plan](public-frontier-plan.md).
+There is no valid local CV. Commit and push before launch; record the outcome separately.
+
