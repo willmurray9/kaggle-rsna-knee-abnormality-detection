@@ -45,6 +45,35 @@ Sources and licenses (Kaggle API, October 2): CC0 — the three `dreaddevelopmen
 `mattiaangeli/opencv-python-headless` wheel. All are public and free, meeting rules
 section 2.6; section 2.8 exempts incompatibly licensed inputs from winner licensing.
 
+## Static audit — completed before submission
+
+Five parallel auditors read every cell, followed by a completeness critic; no code
+ran locally. Three had reported, plus a pattern search of all cells, before the private
+example run launched; the DINOv2 and Raptor/CoAt reports arrived during that run and
+before any submission. There are no network clients, credential reads, exfiltration or report
+or label use at inference. `train.csv` is read only for its row count. The only
+subprocesses are local CoAt reader children and `pip install --no-deps --target`
+from attached wheels. One embedded payload decodes to plain linear-calibrator
+coefficients. We accept these documented limitations, unchanged, for a faithful
+reproduction:
+
+- **Unrestricted deserialization.** Third-party checkpoints are unpickled with
+  `weights_only=False`: the 20 DINOv2 members, five A5 folds, three Raptor
+  checkpoints and SHA-pinned E13 heads. This runs only inside the private,
+  internet-disabled Kaggle container.
+- **Partial pinning.** Several inputs are not hash-pinned (A5 folds, Raptor
+  checkpoints, DINOv2 tails), so a newer dataset version could change predictions
+  silently. Example-output parity with the source run is the guard.
+- **Fail-open stages.** A failed CoAt reader is dropped and the survivors are
+  reweighted, and Raptor/A5/Rad failures become neutral fills. Only the DINOv2
+  20/20 gate and the Rad calibrator flag stop the run. Kaggle withholds hidden-run
+  logs, so the receipts below verify only the three-study example.
+- **Different hidden path.** The hidden run (about 1,300 studies) runs CoAt
+  readers sequentially and uses disk-backed pixel caches. It is bounded by an
+  internal eight-hour budget, within the nine-hour limit.
+- **Two GPUs required.** The run needs exactly two T4s and the pinned Docker
+  environment. Hosted metadata confirmed both after the push.
+
 ## Validation and decision
 
 There is **no valid local CV**: these competition-trained weights may have seen our
@@ -52,7 +81,10 @@ There is **no valid local CV**: these competition-trained weights may have seen 
 portability risks before launch. Before submitting, the private example run must
 complete with every stage receipt present (20 DINOv2 members, A5, RadImageNet,
 Raptor, four CoAt readers) and no fallback counters, and its `submission.csv` must
-match the source's example output within 1e-6.
+match the source's example output within 1e-6. The receipt's environment, checkpoint
+hashes and event kinds must equal the source's. The source records only
+`cache_complete`, `dino_shared_path_parity` and `raptor_checkpoint`; any other
+kind indicates degradation.
 
 Submit once if those checks pass. A public score strictly above **0.891** makes this
 the primary submission baseline and ends today's attempts. Otherwise record the result,
