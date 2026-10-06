@@ -6,7 +6,7 @@ Keep one row per hypothesis. Detailed outputs live under `artifacts/experiments/
 | --- | --- | --- | --- | --- |
 | 2026-09-16 | constant | Verify data, score and output plumbing with 0.5 probabilities | Expected macro AUC 0.500; no learned model or CV | Sanity reference only; no upload |
 | 2026-09-16 | metadata-v1 | Acquisition series counts may carry weak disease signal. Compare fixed C=0.1 logistic regression with 0.5 and fold-training prevalence on one frozen three-fold study/report-group split; no reports, images or UIDs as predictors. Hypothesis and selection rule registered before fitting. | Mean fold macro AUC **0.598926**, fold SD 0.043192; both references 0.500000 | Selected by prespecified mean AUC > 0.500 rule. No hyperparameter/seed search or leaderboard-driven changes. |
-| 2026-09-16 | public-image-reference | A vetted public DINOv2/report-supervised image ensemble should provide a stronger submission reference. Reproduce its exact pixel recipe with strict output validation and safe checkpoint loading. | Private offline example passed: 20 members × 10 windows; actual submission 56286555 **COMPLETE**, public AUC **0.891** | Best submitted public score. Treat as external reference; public competition-trained weights are not valid local CV. |
+| 2026-09-16 | public-image-reference | A vetted public DINOv2/report-supervised image ensemble should provide a stronger submission reference. Reproduce its exact pixel recipe with strict output validation and safe checkpoint loading. | Private offline example passed: 20 members × 10 windows; actual submission 56286555 **COMPLETE**, public AUC **0.891** | Best submitted public score until 56777807 (0.943). Treat as external reference; public competition-trained weights are not valid local CV. |
 | 2026-09-16 | frozen-image-supervision-v1 | Frozen DINOv2-S image features should outperform acquisition counts; additional masked report-derived supervision should improve the same regularized heads. Compare explicit-only, report-derived weight 1.0 and report-derived weight 0.25 on frozen folds, C=0.1, no hyperparameter search. | Mean fold observed-label AUC: explicit-only **0.651561**, full silver **0.691281**, quarter silver **0.697812**; comparison/refit 12.84 seconds | Quarter silver selected by the prespecified highest-mean rule. Its small advantage over full silver is inconclusive; preserve all OOF predictions and inspect probability errors. |
 | 2026-09-16 | frozen-image-pca32-v1 | The quarter-weight silver model improves ranking but has worse Brier error than gold-only and 58/696 incorrect probabilities outside 0.05–0.95. Test whether a 32-component unwhitened PCA restriction reduces unstable high-dimensional fitting. Keep encoder, folds, labels, C=0.1 and silver weight 0.25 fixed; fit scaler/PCA only on training rows, seed 20260916, no rank search. | Mean AUC **0.692956**, delta **−0.004856**; two folds improved, mean-fold Brier 0.223942 | Rejected by the registered mean-AUC requirement; retain quarter-weight baseline. This is exploratory reuse of 58 validation cases. |
 | 2026-09-16 | coverage-mean-v1 | Twelve central slices and ten neighboring three-slice windows, averaged per plane, may recover information lost by the sparse sample. Keep generic encoder, 224 px, three selected series, labels, silver weight 0.25 and C=0.1 fixed. | Mean AUC **0.712094**, delta **+0.014282**; two folds improved | Passes declared promotion rule; conditional interval includes zero. Offline inference passed; superseded by the adapted candidate before competition submission. |
@@ -14,6 +14,7 @@ Keep one row per hypothesis. Detailed outputs live under `artifacts/experiments/
 | 2026-09-16 | coverage-adaptation-v1 | Compare frozen versus final-two-block DINOv2 adaptation on identical uint8 pixels and deterministic sampled training windows. Same attention head, six epochs, batch eight, AdamW head LR 0.001/backbone LR 0.000008, decay 0.02, silver weight 0.25; all windows at inference. | Frozen control **0.697164**; adapted **0.759911**. Adaptation improves all three folds versus both control and original; complete job 1,832.16 seconds | Adapted final refit selected before leaderboard feedback. Exact offline parity passed; submission **56290319 COMPLETE**, public AUC **0.780**, new independent best. |
 | 2026-09-17 | depth-adaptation-v1 | Train final six versus two DINOv2 blocks; keep labels, saved folds, pixels, head, six epochs, optimizer and sampling fixed. Rerun the two-block control and compare against the saved reference. | Two-block control **0.759911**, exactly reproducing saved predictions; six-block candidate **0.748275**, delta **−0.011635**, one of three folds improves; complete job 2,258.52 seconds | Rejected by the preregistered rule. Retain independent public best **0.780**; no new submission or per-target blend. |
 | 2026-09-22 | all-window-v1 | Train on all ten versus three windows per plane with unchanged labels, folds, architecture and six-epoch recipe. | Three-window control exactly reproduced **0.774776**; ten windows **0.769655**, delta **−0.005122**, two folds improve; 2.79-hour comparison | Local promotion failed; three-window baseline retained. Requested diagnostic submission **56471807 COMPLETE**, public **0.819**, new independent public best **+0.018**. No leaderboard-driven retuning. |
+| 2026-10-02 | public-frontier-v1 | Reproduce the fully public 0.943 stack (DINOv2, A5, RadImageNet, Raptor, four CoAtNet readers) unchanged as a private offline 2×T4 notebook; source `yamadan96/rsna-knee-d4-public0946` v2. | No valid local CV (competition-trained public weights); example `submission.csv` byte-identical to the source's | Submission **56777807 COMPLETE**, public **0.943**, **+0.052** over 0.891. Becomes the primary baseline; that day's other submissions went unused while the score was pending. |
 
 The independent improvement pass is specified in
 [its plan](independent-improvement-plan.md). The separate 120-report rules pilot
@@ -757,3 +758,47 @@ or that other combinations cannot help. The blend has no valid local CV on our
 58 gold studies. `status-refresh.json` and `scoring_result.json` preserve the
 authenticated response and first observation time; the gap since the submission
 request does not measure actual completion time or hidden inference duration.
+
+## October 2 public frontier reproduction — preregistered
+
+The public leaderboard has moved well past our 0.891 reference: the strongest fully
+public notebooks score 0.943 and the leaderboard top is 0.961. Reproduce that
+public stack unchanged as a private offline notebook. Our own models and the 0.891
+ensemble's members are not retrained or reweighted. The source choice, licenses,
+validation gates and decision rule are fixed in [the plan](public-frontier-plan.md).
+There is no valid local CV. Commit and push before launch; record the outcome separately.
+
+### Public frontier outcome — primary baseline replaced
+
+Pushed revision `4052b94` packaged a byte-identical copy of the source notebook
+as private notebook `willmurray99/rsna-knee-public-frontier`, version 1. The
+hosted notebook pulled on October 6 has the same SHA-256. Hosted metadata from the
+same pull (`hosted-check.json`) confirms:
+- private, internet-disabled 2×T4 execution
+- the source's pinned Docker image
+- every public source attached
+
+Five parallel static auditors read every cell, followed by a completeness critic.
+`artifacts/research/public-frontier/audit-findings.json` saves their findings and
+finish times. Three auditors and a pattern search of all cells finished before the
+16:09:49 UTC launch. The DINOv2 and Raptor/CoAt auditors and the critic finished
+by 16:13 UTC, before the 16:17 submission. They recorded the accepted limitations
+in [the plan](public-frontier-plan.md): unrestricted pickled checkpoints, partial
+input pinning and fail-open stages. `make test` (385 tests) passed in the
+pre-launch session.
+
+The three-study example's pipeline receipt records 329.6 seconds (the source's
+records 299.7). Its `submission.csv` is byte-identical to the source author's.
+The receipt matches the source's on member counts, environment, checkpoint hashes
+and event kinds, with no degradation events. Submission
+**56777807** completed at public AUC **0.943**, first observed on October 6.
+
+This exceeds the registered 0.891 threshold by **0.052**, so the frontier
+reproduction becomes the primary submission baseline. The other four submissions
+that day went unused while the score was pending.
+
+The result reproduces public work; it is not an independent modeling gain and
+has no valid local CV. The independent public best (0.819) and the locally
+selected three-window baseline (0.77478) are unchanged. Next steps are in the
+[roadmap](roadmap.md).
+
