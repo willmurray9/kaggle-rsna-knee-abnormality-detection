@@ -15,6 +15,7 @@ Keep one row per hypothesis. Detailed outputs live under `artifacts/experiments/
 | 2026-09-17 | depth-adaptation-v1 | Train final six versus two DINOv2 blocks; keep labels, saved folds, pixels, head, six epochs, optimizer and sampling fixed. Rerun the two-block control and compare against the saved reference. | Two-block control **0.759911**, exactly reproducing saved predictions; six-block candidate **0.748275**, delta **−0.011635**, one of three folds improves; complete job 2,258.52 seconds | Rejected by the preregistered rule. Retain independent public best **0.780**; no new submission or per-target blend. |
 | 2026-09-22 | all-window-v1 | Train on all ten versus three windows per plane with unchanged labels, folds, architecture and six-epoch recipe. | Three-window control exactly reproduced **0.774776**; ten windows **0.769655**, delta **−0.005122**, two folds improve; 2.79-hour comparison | Local promotion failed; three-window baseline retained. Requested diagnostic submission **56471807 COMPLETE**, public **0.819**, new independent public best **+0.018**. No leaderboard-driven retuning. |
 | 2026-10-02 | public-frontier-v1 | Reproduce the fully public 0.943 stack (DINOv2, A5, RadImageNet, Raptor, four CoAtNet readers) unchanged as a private offline 2×T4 notebook; source `yamadan96/rsna-knee-d4-public0946` v2. | No valid local CV (competition-trained public weights); example `submission.csv` byte-identical to the source's | Submission **56777807 COMPLETE**, public **0.943**, **+0.052** over 0.891. Becomes the primary baseline; that day's other submissions went unused while the score was pending. |
+| 2026-10-06 | stack-reader-v1 | Add the author's independently trained 2.5D ConvNeXt reader at a fixed 30% rank weight to the unchanged 0.943 stack; source `goodpjw2008/rsna-knee-stack-2-5d-convnext-mil-lb-0-944` v5, author-reported 0.944. | No valid local CV | Preregistered; submit once after stack and reader parity. Above 0.943 becomes the primary baseline. |
 
 The independent improvement pass is specified in
 [its plan](independent-improvement-plan.md). The separate 120-report rules pilot
@@ -801,4 +802,14 @@ The result reproduces public work; it is not an independent modeling gain and
 has no valid local CV. The independent public best (0.819) and the locally
 selected three-window baseline (0.77478) are unchanged. Next steps are in the
 [roadmap](roadmap.md).
+
+## October 6 stack plus independent reader — preregistered
+
+The user approved one attempt beyond the 0.943 baseline. A newer fully public
+notebook keeps the 0.943 stack unchanged and rank-blends in its author's
+independently trained 2.5D ConvNeXt reader at a fixed 30%. The author reports
+0.944. The stack cells are identical to those already audited; only the reader,
+blend and figure cells are new. Parity covers both the stack output and the
+reader's own probabilities, because three-study ranks cannot show the reader's
+effect. The source, gates and decision are fixed in [the plan](stack-reader-plan.md).
 
