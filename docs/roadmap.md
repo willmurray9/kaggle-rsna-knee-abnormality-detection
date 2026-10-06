@@ -11,7 +11,7 @@ split and all 58 gold assignments. Independent image-head comparisons completed:
 observed-only AUC 0.65156, full report-label weight 0.69128, quarter weight 0.69781.
 The chosen quarter-weight model completed hidden scoring with public AUC **0.718**.
 A single PCA-32 simplification failed its selection rule and was rejected. The
-separate public reference completed at **0.891**, the best submitted public score. See [the image workflow](image-model.md).
+separate public reference completed at **0.891**, then the best submitted public score. See [the image workflow](image-model.md).
 
 The next independent pass completed broader slice coverage, cached attention and
 a matched encoder-adaptation comparison on the same labels and folds. Mean local
@@ -57,8 +57,8 @@ our new independent public best (**+0.018**). The local selection decision remai
 unchanged; the disagreement warrants stronger validation rather than tuning to
 this leaderboard result. See [the plan and outcome](all-window-plan.md).
 
-**Current submission focus:** use the reproduced public **0.891** ensemble as
-the primary baseline. The completed [fixed experiment](reference-blend-plan.md) added
+**September 22 blend:** the reproduced public **0.891** ensemble was then the
+primary baseline. The completed [fixed experiment](reference-blend-plan.md) added
 10% of our independent **0.819** model after ranking both parents per target
 across the complete test set. It keeps all twenty public members and the existing
 independent checkpoint, with no retraining, relabeling or coefficient search.
@@ -75,8 +75,9 @@ three-window training remains the local baseline for controlled comparisons.
 **October 2 review:** the leaderboard top is 0.961, and the strongest *fully public*
 notebooks converge on one 0.943 stack: DINOv2, A5, RadImageNet, Raptor and four
 CoAtNet readers. The [fixed reproduction](public-frontier-plan.md) of that stack
-is the first attempt; it reproduces public work rather than adding our own
-modeling. Ideas beyond it, in priority order:
+reproduces public work rather than adding our own modeling. Submission **56777807**
+completed at **0.943** (first observed October 6), so it is now the primary submission baseline (**+0.052**
+over 0.891). Ideas beyond it, in priority order:
 
 1. **Train a diverse, competitive model to blend at about 10%.** A public parent
    reached 0.946 from 0.943 by adding its author's private ConvNeXt ensemble at

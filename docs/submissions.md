@@ -1,18 +1,19 @@
 # Submission log
 
-The reproduced public ensemble's **0.891** (ref **56286555**) remains our primary submission baseline and best scored submission. The fixed 90/10 rank blend scored **0.889** (ref **56473633**), so it does not replace the pure ensemble. Our best independently trained submission remains **0.819** (ref **56471807**), up from **0.801** for three-window training, **0.780** for one-window adaptation, **0.718** for the frozen image model and **0.508** for metadata. All seven submissions are complete. Three-window training remains the locally selected independent baseline because the ten-window diagnostic failed its local promotion rule.
+The reproduced public frontier's **0.943** (ref **56777807**) is our primary submission baseline and best scored submission, replacing the earlier **0.891** public reference (ref **56286555**). The fixed 90/10 rank blend scored **0.889** (ref **56473633**). Our best independently trained submission remains **0.819** (ref **56471807**), up from **0.801** for three-window training, **0.780** for one-window adaptation, **0.718** for the frozen image model and **0.508** for metadata. All eight submissions are complete. Three-window training remains the locally selected independent baseline because the ten-window diagnostic failed its local promotion rule.
 
 This competition executes a notebook against hidden test data. Local example CSV validation is only a format check. Record actual submissions here when they happen.
 
 | Date UTC | Notebook / version | Code commit | Artifact hashes | Reason to submit | Public AUC | Decision |
 | --- | --- | --- | --- | --- | --- | --- |
 | 2026-09-16 19:21:24 | [RSNA Knee First Submission](https://www.kaggle.com/code/willmurray99/rsna-knee-first-submission), version **2**; ref **56286205** | `3b79c70` + recorded working-tree source hashes | Full hashes below | Prespecified metadata model beat both constant references on frozen CV; offline CPU output verified | **0.508**, COMPLETE | First submission milestone achieved. Preserve as baseline; next investigate image features, without leaderboard-driven tuning. |
-| 2026-09-16 19:50:10 | [RSNA Knee Image Reference](https://www.kaggle.com/code/willmurray99/rsna-knee-image-reference), version **1**; ref **56286555** | Working-tree packager; versioned notebook hash below | Versioned build, weights and execution manifests | Audited public image reference; all 20 members × 10 windows passed private offline GPU example execution | **0.891**, COMPLETE | Best submitted public score; external competition-trained ensemble, with no valid CV result on our saved folds. |
+| 2026-09-16 19:50:10 | [RSNA Knee Image Reference](https://www.kaggle.com/code/willmurray99/rsna-knee-image-reference), version **1**; ref **56286555** | Working-tree packager; versioned notebook hash below | Versioned build, weights and execution manifests | Audited public image reference; all 20 members × 10 windows passed private offline GPU example execution | **0.891**, COMPLETE | Best submitted public score until 56777807 (0.943); external competition-trained ensemble, with no valid CV result on our saved folds. |
 | 2026-09-16 20:37:58 | [RSNA Knee Independent Image](https://www.kaggle.com/code/willmurray99/rsna-knee-independent-image), version **1**; ref **56287107** | `3b79c70` + recorded source snapshots/hashes | Versioned build, model and inference manifests | Quarter-weight report supervision selected on corrected frozen folds; PCA-32 rejected; offline parity verified | **0.718**, COMPLETE | Successful hidden-test result, +0.210 over metadata; retain as independent image baseline. |
 | 2026-09-17 00:50:24 | [RSNA Knee Adapted Image](https://www.kaggle.com/code/willmurray99/rsna-knee-adapted-image), version **1**; ref **56290319** | `3b79c70` + exact working-tree training/inference source hashes | Versioned training, build, selection and parity manifests | Highest eligible local mean AUC **0.759911**; improves all three folds over original and matched frozen control; exact offline parity | **0.780**, COMPLETE | New independently trained best, **+0.062** over 0.718; no recipe changes from leaderboard feedback. |
 | 2026-09-18 22:04:43 | [RSNA Knee Multi Window Image](https://www.kaggle.com/code/willmurray99/rsna-knee-multi-window-image), version **1**; ref **56341808** | `2f4daefd1cc0baddf08807867edbd5dd346df2e5` | Full hashes below | Local AUC **0.774776**, all three folds improve over exactly reproduced one-window control; exact offline parity | **0.801**, COMPLETE | Independent best, **+0.021** over 0.780. |
 | 2026-09-22 18:38:27 | [RSNA Knee All Window Image](https://www.kaggle.com/code/willmurray99/rsna-knee-all-window-image), version **1**; ref **56471807** | `ec3b6867c8be8b081ba8215054450fe794585c82` | Full hashes below | User-requested diagnostic; local **0.769655** fails promotion versus **0.774776**; exact offline parity | **0.819**, COMPLETE | New independent public best, **+0.018**; retain three-window locally selected baseline and the decision frozen before public feedback. |
 | 2026-09-22 20:34:27 | [RSNA Knee Reference Blend](https://www.kaggle.com/code/willmurray99/rsna-knee-reference-blend), version **2**; ref **56473633** | `5a1d9fd77c4d63ab9741c259767db78bdd9cec25` | Full hashes below | Fixed 90/10 targetwise rank blend; both parents reproduce exactly and independent arithmetic matches; no valid local CV | **0.889**, COMPLETE | **0.002 below** the pure reference; retain 0.891 under the registered rule, without coefficient search. |
+| 2026-10-02 16:17:14 | [RSNA Knee Public Frontier](https://www.kaggle.com/code/willmurray99/rsna-knee-public-frontier), version **1**; ref **56777807** | `4052b94cfff2a6c167f84637e65f8aa37db5620b` packager; `8e923f33bf70b352d73737cfebcb23ea9bb29ed9` at submission | Full hashes below | Unchanged private copy of the public 0.943 stack; example `submission.csv` byte-identical to the source's; no valid local CV | **0.943**, COMPLETE | **+0.052** over 0.891; becomes the primary baseline under the registered rule. The day's other four submissions were left unused. |
 
 Keep training/weight/config hashes with each run; record the generated CSV hash where available. Preserve the local validation result before viewing the leaderboard score.
 
@@ -295,3 +296,49 @@ version's launch, parity, request and scoring evidence is under
 `artifacts/reports/reference-blend-v2/` and
 `artifacts/kaggle/reference-blend/versions/v2/`; version 1 evidence remains
 preserved separately.
+
+## Public frontier reproduction — version 1
+
+The [registered experiment](public-frontier-plan.md) copies
+`yamadan96/rsna-knee-d4-public0946` **version 2** byte-for-byte into private
+notebook `willmurray99/rsna-knee-public-frontier`, version **1**. The stack is
+20 DINOv2-small members, five A5 folds, RadImageNet heads, four Raptor views and
+four CoAtNet readers. The kernel is private and internet-disabled, uses 2×T4 and
+the source's pinned Docker image, and attaches the competition, 14 public datasets,
+two public kernel outputs and DINOv2-small. Hosted metadata pulled on October 6
+(`hosted-check.json`) confirms each setting. The hosted notebook hashes to the
+source's SHA-256. No code, weight, routing or blend change was made. These competition-trained
+weights have no valid local CV on our saved folds.
+
+The private example pipeline receipt records **329.6 seconds** (the source's
+records 299.7). Its `submission.csv` is byte-identical to the source author's
+example output (maximum difference **0**), and all 15 checks in `parity.json`
+passed. Other receipts differ only in timing fields. The receipt matches the source's on:
+- 20/20 DINOv2 members, five A5 folds and four CoAt readers
+- environment (torch 2.10.0+cu128, CUDA 12.8, 2× Tesla T4) and checkpoint hashes
+- event kinds, with no fallback or degradation events
+
+The repository validator also passed. Because several stages fail open, these
+checks cover only the three visible studies; Kaggle withholds hidden-run logs.
+
+| Artifact | SHA-256 |
+| --- | --- |
+| Packaged and hosted notebook (identical to source) | `35547f8a28ed09fc68acefa6d23f12fa0bfd6a959f54fdadfdfc3dc3c32768f8` |
+| Source kernel metadata | `a69a39714c6e33686aa2b784c75023377689dc1c0d0d9a86376e1167840bca55` |
+| Private kernel metadata | `c68b8f15590d6aa5beadd4c6d3f7370018f34eb4b6f1af1f7fdf0615482c7dcc` |
+| Kaggle example CSV | `8f0c5e7b2b561538dae55439a4d2e9173141096da3defd9bc0a4bac351eef37a` |
+| Parity record | `8ca576eef570127350ef15384edb4214996fd8b341be3cb5cd7cbd297855c2a4` |
+
+Kaggle accepted ref **56777807** at **16:17:14 UTC** on October 2. It was last
+observed PENDING at 21:29:47 UTC that day. The authenticated API first confirmed
+**COMPLETE**, public AUC **0.943**, with no error description, at **15:38:52 UTC on
+October 6**. These observation times bracket completion; they do not measure
+hidden inference duration. This is **+0.052** over the 0.891 reference, so the
+registered rule makes it the primary baseline. The day's other four submissions
+were left unused while the score was pending (`submissions-listing.json`).
+
+It is one public-test observation of a reproduction, not an independently trained
+result. The independent public best remains **0.819** and the local three-window
+baseline **0.77478**. Build, push, parity, request and scoring records are under
+`artifacts/kaggle/public-frontier/versions/v1/`. The pinned source, its example
+outputs and the cell-level audit view are under `artifacts/research/public-frontier/`.

@@ -90,3 +90,14 @@ Submit once if those checks pass. A public score strictly above **0.891** makes 
 the primary submission baseline and ends today's attempts. Otherwise record the result,
 diagnose any failure, and use a remaining submission only on a materially different
 candidate. Retain all earlier submissions and the independent three-window baseline.
+
+## Outcome — October 6
+
+All gates passed. The example `submission.csv` is byte-identical to the source's
+(SHA-256 `8f0c5e7b…`), as is the hosted notebook. The receipt matches the source's member counts,
+environment, checkpoint hashes and event kinds, and the repository validator
+passed. Submission **56777807** completed with public AUC **0.943**, first
+observed on October 6. That is above **0.891**, so this reproduction is now the
+primary submission baseline. The other four submissions that day went unused while
+the score was pending.
+Evidence and hashes are in [the submission log](submissions.md).

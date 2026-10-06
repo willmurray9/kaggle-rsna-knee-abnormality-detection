@@ -2,7 +2,7 @@
 
 A small, explainable starting point for the [Kaggle competition](https://www.kaggle.com/competitions/rsna-knee-abnormality-detection), using the same basic structure as our soil-grain project.
 
-**Status:** the reproduced public ensemble's **0.891** AUC remains our primary submission baseline. The [fixed 90/10 rank blend](docs/reference-blend-plan.md), submission **56473633**, completed at **0.889**, so it does not replace the pure ensemble. Our best independently trained submission remains **0.819** from the [all-ten-window diagnostic](docs/all-window-plan.md), ref **56471807**. Three-window training remains the locally selected independent baseline: **0.77478** local AUC versus **0.76965** for ten windows. The public ensemble and blend have no valid local CV on our folds. See [experiments](docs/experiments.md) and [submission evidence](docs/submissions.md). Final deadline: **October 22, 2026, 23:59 UTC**.
+**Status:** our primary submission baseline is now the [reproduced public frontier](docs/public-frontier-plan.md), submission **56777807**, public AUC **0.943**, which is **+0.052** over the earlier **0.891** public reference. It is an unchanged private copy of public work, not an independent modeling gain, and has no valid local CV on our folds. The [fixed 90/10 rank blend](docs/reference-blend-plan.md), submission **56473633**, completed at **0.889** and remains a record only. Our best independently trained submission remains **0.819** from the [all-ten-window diagnostic](docs/all-window-plan.md), ref **56471807**. Three-window training remains the locally selected independent baseline: **0.77478** local AUC versus **0.76965** for ten windows. The 0.891 reference and the blend also have no valid local CV on our folds. See [experiments](docs/experiments.md) and [submission evidence](docs/submissions.md). Final deadline: **October 22, 2026, 23:59 UTC**.
 
 The key challenge is supervision: the current training CSV has **4,407 studies**, but only **58 have the 12 condition labels**. All have reports; test studies do not. Missing labels must stay unknown. See [competition details](docs/competition.md) and the [roadmap](docs/roadmap.md).
 
@@ -44,6 +44,17 @@ diagnostic submission **56471807** completed with public AUC **0.819**, our new
 independent public best (**+0.018**). This public gain does not change the frozen
 local selection decision; the disagreement highlights the limits of our small
 validation set.
+
+The October 2 [public frontier reproduction](docs/public-frontier-plan.md) copied
+the strongest fully public notebook unchanged into a private offline 2×T4 notebook.
+That notebook combines DINOv2, A5, RadImageNet, Raptor and four CoAtNet readers.
+Its source and metadata are pinned by hash, and every cell was statically audited.
+The example `submission.csv` was byte-identical to the source's, with every stage
+receipt present. Attached dataset versions are not hash-pinned, several stages
+fail open, and these checks cover only the three visible studies. Submission
+**56777807** completed at **0.943**, our best public score.
+It is not independent validation: the public weights may have seen our 58 gold studies.
+Next steps are in the [roadmap](docs/roadmap.md).
 
 ## Start here
 
