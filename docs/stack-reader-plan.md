@@ -28,9 +28,37 @@ to the audited 0.943 notebook. The new code covers:
 - the blend cell
 - two figure cells
 
-The only new input is `goodpjw2008/rsna-knee-2-5d-convnext-reader` (Apache 2.0). It
-was updated on October 5, after the author's last run on October 3. Dataset
-sources attach their latest version, so reader parity is required.
+The only new input is `goodpjw2008/rsna-knee-2-5d-convnext-reader` (Apache 2.0).
+All of its files were first published on October 5, and version 5 reads its three
+checkpoints from it. The author's public example output therefore comes from these
+checkpoints; the kernel list shows that run on October 6. Dataset sources attach
+their latest version and nothing pins the reader's checkpoint hashes, so reader
+parity against that output is required.
+
+## Static audit — completed before launch
+
+Two auditors read every new cell; no code ran locally. The reader reads only
+`test.csv`, `test_series.csv` and test DICOMs. It installs pylibjpeg and timm from
+attached wheels with `--no-deps` and makes no network calls. Accepted limitations,
+recorded rather than changed:
+
+- **Unrestricted checkpoint loading.** The three reader checkpoints are loaded
+  with `weights_only=False` and are not hash-pinned, the same risk class as the
+  stack's checkpoints, inside the private, internet-disabled container.
+- **No reader timeout.** The reader runs after the stack's internal eight-hour
+  budget with no timeout of its own. A hang would hit Kaggle's nine-hour kill and
+  lose the whole submission.
+- **The `%%stack` wrapper swallows stack-cell exceptions.** Most stack failures
+  still stop before `submission.csv` is written. One path could publish a stack
+  without A5: a non-timeout A5 error. The original 0.943 notebook would have halted
+  on that error. Our 0.943 run of the same cells completed on the hidden set.
+- **Silent degradation inside the reader.** Per-file and per-series decode errors
+  are skipped silently. The blend falls back to the stack's submission if the
+  reader fails outright.
+- **Some leaderboard selection already in the source.** The author tested 15%,
+  30% and 45% reader weights on the public leaderboard (0.944, 0.944 and 0.942).
+  The 0.944 therefore includes a small amount of leaderboard selection. We do not
+  tune further.
 
 ## Recipe
 
