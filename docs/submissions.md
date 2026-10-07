@@ -1,6 +1,6 @@
 # Submission log
 
-The reproduced public frontier's **0.943** (ref **56777807**) is our primary submission baseline and best scored submission, replacing the earlier **0.891** public reference (ref **56286555**). The fixed 90/10 rank blend scored **0.889** (ref **56473633**). Our best independently trained submission remains **0.819** (ref **56471807**), up from **0.801** for three-window training, **0.780** for one-window adaptation, **0.718** for the frozen image model and **0.508** for metadata. All eight submissions are complete. Three-window training remains the locally selected independent baseline because the ten-window diagnostic failed its local promotion rule.
+The public stack plus independent reader's **0.944** (ref **56885722**) is our primary submission baseline and best scored submission. It is one tick above the reproduced public frontier's **0.943** (ref **56777807**), which replaced the earlier **0.891** public reference (ref **56286555**). Both 0.943 and 0.944 remain final-selection candidates. The fixed 90/10 rank blend scored **0.889** (ref **56473633**). Our best independently trained submission remains **0.819** (ref **56471807**), up from **0.801** for three-window training, **0.780** for one-window adaptation, **0.718** for the frozen image model and **0.508** for metadata. All nine submissions are complete. Three-window training remains the locally selected independent baseline because the ten-window diagnostic failed its local promotion rule.
 
 This competition executes a notebook against hidden test data. Local example CSV validation is only a format check. Record actual submissions here when they happen.
 
@@ -14,6 +14,7 @@ This competition executes a notebook against hidden test data. Local example CSV
 | 2026-09-22 18:38:27 | [RSNA Knee All Window Image](https://www.kaggle.com/code/willmurray99/rsna-knee-all-window-image), version **1**; ref **56471807** | `ec3b6867c8be8b081ba8215054450fe794585c82` | Full hashes below | User-requested diagnostic; local **0.769655** fails promotion versus **0.774776**; exact offline parity | **0.819**, COMPLETE | New independent public best, **+0.018**; retain three-window locally selected baseline and the decision frozen before public feedback. |
 | 2026-09-22 20:34:27 | [RSNA Knee Reference Blend](https://www.kaggle.com/code/willmurray99/rsna-knee-reference-blend), version **2**; ref **56473633** | `5a1d9fd77c4d63ab9741c259767db78bdd9cec25` | Full hashes below | Fixed 90/10 targetwise rank blend; both parents reproduce exactly and independent arithmetic matches; no valid local CV | **0.889**, COMPLETE | **0.002 below** the pure reference; retain 0.891 under the registered rule, without coefficient search. |
 | 2026-10-02 16:17:14 | [RSNA Knee Public Frontier](https://www.kaggle.com/code/willmurray99/rsna-knee-public-frontier), version **1**; ref **56777807** | `4052b94cfff2a6c167f84637e65f8aa37db5620b` packager; `8e923f33bf70b352d73737cfebcb23ea9bb29ed9` at submission | Full hashes below | Unchanged private copy of the public 0.943 stack; example `submission.csv` byte-identical to the source's; no valid local CV | **0.943**, COMPLETE | **+0.052** over 0.891; becomes the primary baseline under the registered rule. The day's other four submissions were left unused. |
+| 2026-10-06 16:23:09 | [RSNA Knee Stack Reader](https://www.kaggle.com/code/willmurray99/rsna-knee-stack-reader), version **1**; ref **56885722** | `798bf9ad2a5b08d04979d5fe3815d730ad3eba1b` packager; `d30f63d` audit record | Full hashes below | Unchanged private copy of the 0.943 stack plus an independent reader at a fixed 30%; stack and reader example outputs byte-identical to the source's; no valid local CV | **0.944**, COMPLETE | **+0.001** over 0.943; becomes the primary baseline under the registered rule. Within public-leaderboard noise; both remain final-selection candidates. |
 
 Keep training/weight/config hashes with each run; record the generated CSV hash where available. Preserve the local validation result before viewing the leaderboard score.
 
@@ -342,3 +343,53 @@ result. The independent public best remains **0.819** and the local three-window
 baseline **0.77478**. Build, push, parity, request and scoring records are under
 `artifacts/kaggle/public-frontier/versions/v1/`. The pinned source, its example
 outputs and the cell-level audit view are under `artifacts/research/public-frontier/`.
+
+## Public stack plus independent reader — version 1
+
+The [registered experiment](stack-reader-plan.md) copies
+`goodpjw2008/rsna-knee-stack-2-5d-convnext-mil-lb-0-944` **version 5** byte-for-byte
+into private notebook `willmurray99/rsna-knee-stack-reader`, version **1**. It runs
+the unchanged 0.943 stack, then rank-blends in the author's independently trained
+2.5D ConvNeXt-Tiny reader (three checkpoints) at a fixed **30%**. The 23 stack
+cells match the audited 0.943 code apart from a one-line `%%stack` magic; only the
+new cells were audited. Hosted metadata pulled after the push (`hosted-check.json`)
+confirms each setting: private, internet-disabled, 2×T4, the pinned Docker image
+and every source attached. The hosted notebook hashes to the source's SHA-256.
+
+On three studies, a 70/30 rank blend leaves the stack's ranks unchanged, so parity
+checked each component separately. All 19 checks in `parity.json` passed:
+- `_public_stack.csv` byte-identical to the 0.943 example output
+- the reader's `_own.csv` byte-identical to the author's (maximum difference **0**)
+- the stack receipt matching the source's on members, environment, checkpoint
+  hashes and event kinds, with no degradation events
+- the log line `own reader: blended 3 checkpoints at weight 0.3`, with no failure line
+
+The pipeline receipt records 267.1 seconds, and the repository validator passed.
+
+| Artifact | SHA-256 |
+| --- | --- |
+| Packaged and hosted notebook (identical to source) | `941802c45fbc21a763c259d54d35f5fe1600f3a269a39d6773edcbf4185f457e` |
+| Source kernel metadata | `ad567d8ff5ea7bf253264fcb2426c9314a3fd9e5435017b87873abf642e6db18` |
+| Private kernel metadata | `d5cd9b508a28a8145a230b48a795327877c6d8ad46d5de59306909ffc6989988` |
+| Reader example output `_own.csv` | `1606432b738e10e2ed05223ca67ecb3dd6e92195469f9fbb5cd6aa80ca17f55f` |
+| Kaggle example CSV | `8f0c5e7b2b561538dae55439a4d2e9173141096da3defd9bc0a4bac351eef37a` |
+| Parity record | `67f453d721a6c51f4e7ff04c443627a2de0b6987537ed03fd890821e34a6bb96` |
+
+Kaggle accepted ref **56885722** at **16:23:09 UTC** on October 6. It was last
+observed PENDING at 19:07:19 UTC that day. The authenticated API first confirmed
+**COMPLETE**, public AUC **0.944**, with no error description, at **16:37:07 UTC on
+October 7**. These observation times bracket completion; they do not measure hidden
+inference duration. This is **+0.001** over 0.943, so the registered rule makes it
+the primary baseline.
+
+The author reports that the stack is not fully deterministic: this same 30% pipeline scored 0.944, 0.944 and 0.943 across three of their runs, while stack-only runs have only been observed at 0.943. The 0.944 is consistent with the reader having run. The one-tick
+difference is within that run-to-run variation and on a subset of the test set,
+so it cannot be attributed to the reader. The stack cells are code-identical but
+run under the source's exception-swallowing `%%stack` wrapper. The author states
+the 30% weight was fixed before submitting. They also report public-leaderboard
+probes at 15%, 30% and 45% (0.944, 0.944 and 0.942), so the published 0.944
+carries some leaderboard selection. Both 56777807 and
+56885722 remain final-selection candidates. The independent public best remains
+**0.819** and the local three-window baseline **0.77478**. Records are under
+`artifacts/kaggle/stack-reader/versions/v1/`; the pinned source, the author's
+example outputs and the cell view are under `artifacts/research/stack-reader/`.

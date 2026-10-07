@@ -76,7 +76,7 @@ three-window training remains the local baseline for controlled comparisons.
 notebooks converge on one 0.943 stack: DINOv2, A5, RadImageNet, Raptor and four
 CoAtNet readers. The [fixed reproduction](public-frontier-plan.md) of that stack
 reproduces public work rather than adding our own modeling. Submission **56777807**
-completed at **0.943** (first observed October 6), so it is now the primary submission baseline (**+0.052**
+completed at **0.943** (first observed October 6), so it became the primary submission baseline (**+0.052**
 over 0.891). Ideas beyond it, in priority order:
 
 1. **Train a diverse, competitive model to blend at about 10%.** A public parent
@@ -93,6 +93,16 @@ over 0.891). Ideas beyond it, in priority order:
 3. **Make the frontier's failure modes visible.** Its CoAt readers fail open and
    several inputs are not hash-pinned. Before relying on it for the final
    selection, re-check example parity whenever its attached datasets change.
+
+**October 6–7 follow-up:** the [stack-reader experiment](stack-reader-plan.md)
+added a public, independently trained 2.5D ConvNeXt reader at a fixed 30% to the
+unchanged stack. Submission **56885722** scored **0.944**, one tick above 0.943,
+and is now the primary baseline. Both remain final-selection candidates. The author
+reports the same pipeline at 0.944, 0.944 and 0.943 across runs, and the
+source's 30% weight already carries some leaderboard selection; we do no further
+tuning. That reader reportedly scores 0.929 alone and adds at most about one
+tick, which tempers idea 1: a single extra reader of similar strength gives no
+evidence of closing the gap to 0.96.
 
 Avoid per-target routing or weight searches on the 58 gold studies (the public
 weights may have seen them), and avoid choosing coefficients from repeated
