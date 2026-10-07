@@ -2,7 +2,7 @@
 
 A small, explainable starting point for the [Kaggle competition](https://www.kaggle.com/competitions/rsna-knee-abnormality-detection), using the same basic structure as our soil-grain project.
 
-**Status:** our primary submission baseline is now the [reproduced public frontier](docs/public-frontier-plan.md), submission **56777807**, public AUC **0.943**, which is **+0.052** over the earlier **0.891** public reference. It is an unchanged private copy of public work, not an independent modeling gain, and has no valid local CV on our folds. The [fixed 90/10 rank blend](docs/reference-blend-plan.md), submission **56473633**, completed at **0.889** and remains a record only. Our best independently trained submission remains **0.819** from the [all-ten-window diagnostic](docs/all-window-plan.md), ref **56471807**. Three-window training remains the locally selected independent baseline: **0.77478** local AUC versus **0.76965** for ten windows. The 0.891 reference and the blend also have no valid local CV on our folds. See [experiments](docs/experiments.md) and [submission evidence](docs/submissions.md). Final deadline: **October 22, 2026, 23:59 UTC**.
+**Status:** our primary submission baseline is now the [public stack plus an independent reader](docs/stack-reader-plan.md), submission **56885722**, public AUC **0.944**. It is **+0.001** over the [reproduced public frontier](docs/public-frontier-plan.md) (submission **56777807**, **0.943**), which was itself **+0.052** over the earlier **0.891** public reference. Both are unchanged private copies of public work, not independent modeling gains, and neither has valid local CV on our folds. A 0.001 difference is within public-leaderboard noise, so both remain candidates for final selection. The [fixed 90/10 rank blend](docs/reference-blend-plan.md), submission **56473633**, completed at **0.889** and remains a record only. Our best independently trained submission remains **0.819** from the [all-ten-window diagnostic](docs/all-window-plan.md), ref **56471807**. Three-window training remains the locally selected independent baseline: **0.77478** local AUC versus **0.76965** for ten windows. The 0.891 reference and the blend also have no valid local CV on our folds. See [experiments](docs/experiments.md) and [submission evidence](docs/submissions.md). Final deadline: **October 22, 2026, 23:59 UTC**.
 
 The key challenge is supervision: the current training CSV has **4,407 studies**, but only **58 have the 12 condition labels**. All have reports; test studies do not. Missing labels must stay unknown. See [competition details](docs/competition.md) and the [roadmap](docs/roadmap.md).
 
@@ -52,9 +52,21 @@ Its source and metadata are pinned by hash, and every cell was statically audite
 The example `submission.csv` was byte-identical to the source's, with every stage
 receipt present. Attached dataset versions are not hash-pinned, several stages
 fail open, and these checks cover only the three visible studies. Submission
-**56777807** completed at **0.943**, our best public score.
+**56777807** completed at **0.943**, then our best public score.
 It is not independent validation: the public weights may have seen our 58 gold studies.
 Next steps are in the [roadmap](docs/roadmap.md).
+
+The October 6 [stack-reader experiment](docs/stack-reader-plan.md) copied a newer
+fully public notebook unchanged. It runs the same 0.943 stack, then rank-blends in
+its author's independently trained 2.5D ConvNeXt reader at a fixed 30%. Its 23
+stack cells match the audited code; only the new cells were audited. In the
+three-study example, the stack output and the reader's own predictions were both
+byte-identical to the source's. Submission **56885722** completed at **0.944**.
+The author reports that the stack is not fully deterministic: this same 30%
+pipeline scored 0.944, 0.944 and 0.943 across three of their runs, while stack-only
+runs have only been observed at 0.943. The 0.944 is consistent with the reader
+having run. The one-tick gain is within run-to-run variation, so it cannot be
+attributed to the reader.
 
 ## Start here
 

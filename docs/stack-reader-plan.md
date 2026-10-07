@@ -92,3 +92,15 @@ kept, so a score of exactly 0.943 does not establish that the reader ran. A
 author reports 6.5–8 hours from submission to score, against a nine-hour limit. A
 timeout would use one submission without producing a score. Both
 candidates remain eligible for final selection, and no weight search follows.
+
+## Outcome — October 7
+
+All gates passed. The stack output and the reader's `_own.csv` are each
+byte-identical to the source's example outputs, as is the hosted notebook.
+Submission **56885722** completed with public AUC **0.944**, first observed on
+October 7. That is above **0.943**, so this blend is now the primary submission
+baseline. The difference is one leaderboard tick. The author reports this same
+pipeline at 0.944, 0.944 and 0.943 across runs, so the gain cannot be attributed to
+the reader. Both submissions remain final-selection candidates, and no weight
+search follows. Evidence and hashes are
+in [the submission log](submissions.md).
